@@ -1,17 +1,23 @@
 > 🇺🇸 English · [🇲🇽 Español](README.es.md)
 
-# Interactive Map — Campus GDL Tec de Monterrey
+> ⚠️ Independent project, not affiliated with Tecnológico de Monterrey. Map data from OpenStreetMap and public sources.
 
-Interactive map of Tecnológico de Monterrey's Guadalajara campus to help students navigate the grounds. Displays buildings by category, supports building search and filtering, and provides walking route navigation along hand-drawn campus paths.
+# Interactive Map — Campus GDL Tec de Monterrey ("Borrego Merodeador")
+
+An interactive map of Tecnológico de Monterrey's Guadalajara campus to help students navigate the grounds. Displays buildings by category, supports search and filtering, provides walking route navigation along hand-drawn campus paths, and tracks the user's live location.
+
+**Live:** https://luisxavierxd.github.io/MapaInteractivoTEC_GDL/
 
 ## Features
 
-- **Building map** — polygons and POIs rendered from custom GeoJSON data, color-coded by category: Academic, Preparatoria, Sports, Dorms, Food, Services, Commercial, Other
+- **Building map** — polygons and POIs color-coded by category: Academic, Preparatoria, Sports, Dorms, LIFE, Food, Services, Commercial, Auditoriums, Other
 - **Search & filter** — search by name, filter by category
-- **Info panel** — click any building to see its details
-- **Walking navigation** — custom on-campus router using hand-drawn walkable paths; falls back to OSRM public routing if path data is unavailable
-- **My location** — route from current GPS position to any building
+- **Info panel** — click any building to see details; selected building is highlighted with a category pin marker
+- **Walking navigation** — custom on-campus router using hand-drawn walkable paths; falls back to OSRM public routing if unavailable
+- **Live location** — 🐏 sheep marker updated continuously via `watchPosition`; auto-starts on repeat visits; falls back to main entrance when outside campus bounds
+- **Dark / light theme** toggle, persisted across sessions
 - **Satellite / street map toggle**
+- **Privacy notice** (LFPDPPP-compliant) with persistent consent and always-accessible button
 - **Mobile-friendly** sidebar layout
 
 ## Stack
@@ -27,8 +33,8 @@ Interactive map of Tecnológico de Monterrey's Guadalajara campus to help studen
 The routing engine (`assets/js/router.js`) builds a graph from GeoJSON LineStrings and runs multi-source Dijkstra. Topology is automatically resolved at load time:
 
 1. **Endpoint gap closure** — LineString endpoints within 3 m of each other are connected
-2. **T-intersection splits** — when a path endpoint lies within 3 m of another segment's interior, that segment is split at the projection point and the endpoint is connected to it
-3. **X-intersection splits** — segments that cross in their interiors (no shared node in GeoJSON) are detected and split at the crossing point, creating a shared junction node
+2. **T-intersection splits** — when a path endpoint lies within 3 m of another segment's interior, that segment is split at the projection point
+3. **X-intersection splits** — segments that cross in their interiors are detected and split at the crossing point, creating a shared junction node
 
 Route start/end points are projected onto the nearest segment rather than snapped to the nearest vertex, and all building entries are evaluated simultaneously as Dijkstra seeds so the globally optimal entry is chosen automatically.
 
@@ -66,7 +72,8 @@ assets/
   css/style.css
   js/
     router.js         # CampusRouter — graph build, topology fix, Dijkstra
-    map.js            # Leaflet map, UI, search, routing UI
+    map.js            # Leaflet map, UI, search, routing UI, theming
+old_maps/             # Previous GeoJSON iterations (reference only)
 ```
 
 ## License

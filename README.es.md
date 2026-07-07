@@ -1,17 +1,23 @@
 > [🇺🇸 English](README.md) · 🇲🇽 Español
 
-# Mapa Interactivo — Campus GDL Tec de Monterrey
+> ⚠️ Proyecto independiente, sin afiliación con el Tecnológico de Monterrey. Datos cartográficos de OpenStreetMap y fuentes públicas.
 
-Mapa interactivo del Campus Guadalajara del Tecnológico de Monterrey para ayudar a los estudiantes a orientarse. Muestra edificios por categoría, permite buscar y filtrar, y ofrece navegación peatonal sobre rutas dibujadas a mano.
+# Mapa Interactivo — Campus GDL Tec de Monterrey ("Borrego Merodeador")
+
+Mapa interactivo del Campus Guadalajara del Tecnológico de Monterrey para ayudar a los estudiantes a orientarse. Muestra edificios por categoría, permite buscar y filtrar, ofrece navegación peatonal sobre rutas dibujadas a mano, y rastrea la ubicación del usuario en tiempo real.
+
+**En vivo:** https://luisxavierxd.github.io/MapaInteractivoTEC_GDL/
 
 ## Funcionalidades
 
-- **Mapa de edificios** — polígonos y POIs renderizados desde GeoJSON propio, con código de color por categoría: Académico, Preparatoria, Deportes, Residencias, Comida, Servicios, Comercial, Otros
+- **Mapa de edificios** — polígonos y POIs con código de color por categoría: Académico, Preparatoria, Deportes, Residencias, LIFE, Comida, Servicios, Comercial, Auditorios, Otros
 - **Búsqueda y filtros** — búsqueda por nombre, filtro por categoría
-- **Panel de info** — al hacer clic en un edificio se muestran sus detalles
-- **Navegación peatonal** — router propio sobre los caminos del campus dibujados a mano; si no hay datos de rutas disponibles, hace fallback a OSRM
-- **Mi ubicación** — ruta desde tu posición GPS actual a cualquier edificio
+- **Panel de info** — al hacer clic en un edificio se muestran sus detalles; el edificio seleccionado se resalta con un pin de categoría en su centroide
+- **Navegación peatonal** — router propio sobre los caminos del campus dibujados a mano; fallback a OSRM si no hay datos disponibles
+- **Ubicación en vivo** — marcador borrego 🐏 actualizado continuamente con `watchPosition`; se inicia automáticamente en visitas repetidas; si el usuario está fuera del campus, se usa la entrada principal como referencia
+- **Modo claro / oscuro** con toggle persistente entre sesiones
 - **Toggleo satélite / mapa de calles**
+- **Aviso de privacidad** (cumple LFPDPPP) con consentimiento persistente y botón siempre visible
 - **Diseño responsivo** para móvil con sidebar
 
 ## Stack
@@ -27,8 +33,8 @@ Mapa interactivo del Campus Guadalajara del Tecnológico de Monterrey para ayuda
 El motor de ruteo (`assets/js/router.js`) construye un grafo a partir de LineStrings GeoJSON y ejecuta Dijkstra multi-fuente. La topología se resuelve automáticamente al cargar:
 
 1. **Cierre de huecos entre extremos** — extremos de LineStrings a menos de 3 m entre sí se conectan automáticamente
-2. **Splits de T-intersección** — cuando el extremo de un camino cae dentro de 3 m del interior de otro segmento, ese segmento se parte en el punto proyectado y se conecta al extremo
-3. **Splits de cruce X** — segmentos que se cruzan en su interior (sin nodo compartido en el GeoJSON) se detectan y se parten en el punto de cruce, creando un nodo de unión compartido
+2. **Splits de T-intersección** — cuando el extremo de un camino cae dentro de 3 m del interior de otro segmento, ese segmento se parte en el punto proyectado
+3. **Splits de cruce X** — segmentos que se cruzan en su interior se detectan y se parten en el punto de cruce, creando un nodo de unión compartido
 
 El inicio y fin de cada ruta se proyectan sobre el segmento más cercano (no sobre el vértice más cercano), y todas las entradas de un edificio se evalúan simultáneamente como semillas de Dijkstra para elegir automáticamente la entrada óptima.
 
@@ -66,7 +72,8 @@ assets/
   css/style.css
   js/
     router.js         # CampusRouter — grafo, topología, Dijkstra
-    map.js            # Mapa Leaflet, UI, búsqueda, interfaz de rutas
+    map.js            # Mapa Leaflet, UI, búsqueda, rutas, temas
+old_maps/             # Versiones anteriores del GeoJSON (referencia)
 ```
 
 ## Licencia
