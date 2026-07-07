@@ -181,6 +181,7 @@ let userMarker = null;
 let userLocation = null; // { lat, lng, name } cuando se obtiene
 let selectedLayer = null;
 let selectionMarker = null;
+let locationCallbacks = []; // suscriptores que esperan la primera ubicación
 
 /* ── GeoJSON layer ────────────────────────────────────── */
 const geoLayer = L.geoJSON(null, {
@@ -493,20 +494,11 @@ document.getElementById('btn-directions').addEventListener('click', () => {
       routeFrom = { _isLocation: true, lat: null, lng: null, name: 'Obteniendo ubicación…' };
       updateRouteUI();
       switchTab('route');
-      navigator.geolocation.getCurrentPosition(pos => {
-        const { latitude: rawLat, longitude: rawLng } = pos.coords;
-        const loc = resolveLocation(rawLat, rawLng);
-        userLocation = loc;
-        locationPermission = 'granted';
-        updateUserMarker(loc.lat, loc.lng);
+      onLocation(loc => {
         routeFrom = { _isLocation: true, ...loc };
         updateRouteUI();
         fetchRoute();
-      }, () => {
-        locationPermission = 'denied';
-        routeFrom = null;
-        updateRouteUI();
-      }, { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 });
+      });
     });
   } else {
     switchTab('route');
@@ -722,19 +714,29 @@ function startLocationWatch() {
     userLocation = loc;
     locationPermission = 'granted';
     updateUserMarker(loc.lat, loc.lng);
+    if (locationCallbacks.length) {
+      locationCallbacks.forEach(cb => cb(loc));
+      locationCallbacks = [];
+    }
   };
 
-  // Fase 1: usa cualquier posición cacheada para mostrar el borrego de inmediato
+  // Fase 1: posición cacheada para mostrar el borrego de inmediato
   navigator.geolocation.getCurrentPosition(onPos, () => {}, {
     enableHighAccuracy: false, maximumAge: Infinity, timeout: 500,
   });
 
-  // Fase 2: actualizaciones continuas con caché de hasta 1 min
+  // Fase 2: actualizaciones continuas
   locationWatcher = navigator.geolocation.watchPosition(
     onPos,
     () => { locationPermission = 'denied'; },
     { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 }
   );
+}
+
+// Llama cb(loc) en cuanto haya ubicación; inmediato si ya existe
+function onLocation(cb) {
+  if (userLocation) { cb(userLocation); return; }
+  locationCallbacks.push(cb);
 }
 
 function applyLocationRoute(lat, lng) {
@@ -813,24 +815,16 @@ document.getElementById('locate-btn').addEventListener('click', () => requestLoc
 
 function locateUser() {
   if (!navigator.geolocation) return alert('Tu navegador no soporta geolocalización.');
-  startLocationWatch();
   const btn = document.getElementById('locate-btn');
   const prev = btn.textContent;
   btn.textContent = '…'; btn.disabled = true;
-  navigator.geolocation.getCurrentPosition(pos => {
+  startLocationWatch();
+  onLocation(loc => {
     btn.textContent = prev; btn.disabled = false;
-    const { latitude: lat, longitude: lng } = pos.coords;
-    const loc = resolveLocation(lat, lng);
-    userLocation = loc;
-    locationPermission = 'granted';
-    updateUserMarker(loc.lat, loc.lng);
     const popupText = loc.name === 'Mi ubicación' ? 'Estás aquí' : 'Fuera del campus — usando Entrada principal';
     userMarker.bindPopup(popupText).openPopup();
     map.setView([loc.lat, loc.lng], 18, { animate: true });
-  }, () => {
-    btn.textContent = prev; btn.disabled = false;
-    alert('No se pudo obtener tu ubicación.');
-  }, { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 });
+  });
 }
 
 document.getElementById('swap-endpoints').addEventListener('click', () => {
