@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa del Borrego Merodeador</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <aside id="sidebar">
+      <div id="sidebar-header">
+        <div class="header-brand">
+          <span class="header-icon">🐏</span>
+          <div class="header-text">
+            <h1>Borrego Merodeador</h1>
+            <p>Mapa del Campus GDL</p>
+          </div>
+        </div>
+        <div id="sidebar-header-btns">
+          <button id="sidebar-close" title="Cerrar">×</button>
+          <button id="locate-btn" title="Mi ubicación">⊕</button>
+        </div>
+      </div>
+
+      <div id="tabs">
+        <button class="tab active" data-tab="explore">Explorar</button>
+        <button class="tab" data-tab="route">Ruta</button>
+      </div>
+
+      <!-- TAB: EXPLORAR -->
+      <div id="tab-explore" class="tab-content active">
+        <div id="search-wrap">
+          <input id="search" type="text" placeholder="Buscar edificio…" autocomplete="off" />
+          <button id="search-clear" aria-label="Limpiar">×</button>
+        </div>
+        <div id="filters"></div>
+        <ul id="building-list"></ul>
+      </div>
+
+      <!-- TAB: RUTA -->
+      <div id="tab-route" class="tab-content">
+        <div id="route-panel">
+          <div class="route-card">
+            <div class="route-row">
+              <span class="route-dot from"></span>
+              <div class="route-field">
+                <label>Origen</label>
+                <div id="route-from-name" class="route-name placeholder">Selecciona en el mapa</div>
+              </div>
+              <button class="route-clear" id="clear-from" title="Limpiar">×</button>
+            </div>
+            <div class="route-divider"></div>
+            <div class="route-row">
+              <span class="route-dot to"></span>
+              <div class="route-field">
+                <label>Destino</label>
+                <div id="route-to-name" class="route-name placeholder">Selecciona en el mapa</div>
+              </div>
+              <button class="route-clear" id="clear-to" title="Limpiar">×</button>
+            </div>
+          </div>
+          <div id="route-summary"></div>
+          <div id="route-hint">
+            <p>Activa el modo ruta y haz clic en dos edificios del mapa.</p>
+          </div>
+          <button id="route-mode-btn">Activar modo ruta</button>
+        </div>
+      </div>
+    </aside>
+
+    <main id="map-wrap">
+      <button id="menu-btn" title="Menú">☰</button>
+      <div id="map"></div>
+
+      <!-- PANEL DE INFO (flotante, sobre el mapa) -->
+      <div id="info-panel" class="hidden">
+        <button id="info-close">×</button>
+        <div id="info-category"></div>
+        <h2 id="info-name"></h2>
+        <div id="info-fields"></div>
+        <div id="info-actions">
+          <div class="info-actions-row">
+            <button class="action-btn from-btn" id="btn-set-from">📍 Desde aquí</button>
+            <button class="action-btn to-btn" id="btn-set-to">🚩 Hasta aquí</button>
+          </div>
+          <button class="action-btn loc-btn" id="btn-from-location">📍 Ruta desde mi ubicación</button>
+        </div>
+      </div>
+
+      <!-- TOGGLE capa de mapa -->
+      <button id="layer-toggle" title="Cambiar vista">Mapa</button>
+
+      <!-- BADGE de modo ruta activo -->
+      <div id="route-mode-badge" class="hidden">
+        Modo ruta activo · haz clic en un edificio
+        <button id="cancel-route-mode">Cancelar</button>
+      </div>
+    </main>
+
+  </div>
+  <div id="sidebar-overlay"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script src="assets/js/router.js"></script>
+  <script src="assets/js/map.js"></script>
+</body>
+</html>

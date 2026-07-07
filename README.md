@@ -1,2 +1,74 @@
-# MapaInteractivoTEC_GDL
-Mapa interactivo del Campus GDL del Tec de Monterrey hecho con Leaflet.js y datos geoespaciales de OpenStreetMap, para orientar a estudiantes de nuevo ingreso.
+> 🇺🇸 English · [🇲🇽 Español](README.es.md)
+
+# Interactive Map — Campus GDL Tec de Monterrey
+
+Interactive map of Tecnológico de Monterrey's Guadalajara campus to help students navigate the grounds. Displays buildings by category, supports building search and filtering, and provides walking route navigation along hand-drawn campus paths.
+
+## Features
+
+- **Building map** — polygons and POIs rendered from custom GeoJSON data, color-coded by category: Academic, Preparatoria, Sports, Dorms, Food, Services, Commercial, Other
+- **Search & filter** — search by name, filter by category
+- **Info panel** — click any building to see its details
+- **Walking navigation** — custom on-campus router using hand-drawn walkable paths; falls back to OSRM public routing if path data is unavailable
+- **My location** — route from current GPS position to any building
+- **Satellite / street map toggle**
+- **Mobile-friendly** sidebar layout
+
+## Stack
+
+- **[Leaflet.js](https://leafletjs.com/)** — interactive maps library
+- **[OpenStreetMap](https://www.openstreetmap.org/)** — base map tiles
+- **[Esri World Imagery](https://www.arcgis.com/)** — satellite tile layer
+- **Custom GeoJSON** — hand-curated building data and walkable path network
+- **[OSRM](https://project-osrm.org/)** — public routing fallback (foot profile)
+
+## Campus router
+
+The routing engine (`assets/js/router.js`) builds a graph from GeoJSON LineStrings and runs multi-source Dijkstra. Topology is automatically resolved at load time:
+
+1. **Endpoint gap closure** — LineString endpoints within 3 m of each other are connected
+2. **T-intersection splits** — when a path endpoint lies within 3 m of another segment's interior, that segment is split at the projection point and the endpoint is connected to it
+3. **X-intersection splits** — segments that cross in their interiors (no shared node in GeoJSON) are detected and split at the crossing point, creating a shared junction node
+
+Route start/end points are projected onto the nearest segment rather than snapped to the nearest vertex, and all building entries are evaluated simultaneously as Dijkstra seeds so the globally optimal entry is chosen automatically.
+
+## Data files
+
+| File | Contents |
+|------|----------|
+| `data/campus.geojson` | Building polygons and POI points (rendered on map) |
+| `data/paths.geojson` | Hand-drawn walkable LineStrings + building entry Points (router only, never rendered) |
+
+## Running locally
+
+A local HTTP server is required so `fetch()` works without CORS errors:
+
+```bash
+# Python 3
+python -m http.server 8080
+
+# Node.js (npx, no install needed)
+npx serve .
+
+# VS Code: Live Server extension → right-click index.html → "Open with Live Server"
+```
+
+Then open [http://localhost:8080](http://localhost:8080).
+
+## Structure
+
+```
+index.html
+data/
+  campus.geojson      # Building polygons + POIs (rendered)
+  paths.geojson       # Walkable paths + entry points (router only)
+assets/
+  css/style.css
+  js/
+    router.js         # CampusRouter — graph build, topology fix, Dijkstra
+    map.js            # Leaflet map, UI, search, routing UI
+```
+
+## License
+
+MIT © Luis Xavier
