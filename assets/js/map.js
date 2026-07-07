@@ -719,16 +719,16 @@ function startLocationWatch() {
     }
   };
 
-  // Fase 1: posición cacheada para mostrar el borrego de inmediato
+  // Fase 1: posición de red (rápida) para mostrar el borrego mientras el GPS calienta
   navigator.geolocation.getCurrentPosition(onPos, () => {}, {
-    enableHighAccuracy: false, maximumAge: Infinity, timeout: 500,
+    enableHighAccuracy: false, maximumAge: 30000, timeout: 5000,
   });
 
-  // Fase 2: actualizaciones continuas — maximumAge bajo para que se mueva en tiempo real
+  // Fase 2: GPS para tracking real de movimiento — maximumAge:0 fuerza posición fresca
   locationWatcher = navigator.geolocation.watchPosition(
     onPos,
     () => { locationPermission = 'denied'; },
-    { enableHighAccuracy: false, maximumAge: 3000, timeout: 10000 }
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
   );
 }
 
