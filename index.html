@@ -84,6 +84,22 @@
       <button id="menu-btn" title="Menú">☰</button>
       <div id="map"></div>
 
+      <!-- BARRA DE NAVEGACIÓN ACTIVA (estilo Waze) -->
+      <div id="nav-bar" class="hidden">
+        <div class="nav-stats">
+          <div class="nav-stat">
+            <span class="nav-val" id="nav-time">--</span>
+            <span class="nav-lbl">min</span>
+          </div>
+          <div class="nav-divider"></div>
+          <div class="nav-stat">
+            <span class="nav-val" id="nav-dist">--</span>
+            <span class="nav-lbl">m</span>
+          </div>
+        </div>
+        <button id="nav-cancel" title="Cancelar ruta">✕</button>
+      </div>
+
       <!-- PANEL DE INFO (flotante, sobre el mapa) -->
       <div id="info-panel" class="hidden">
         <button id="info-close">×</button>

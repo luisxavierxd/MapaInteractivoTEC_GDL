@@ -404,6 +404,45 @@ html, body {
 }
 #privacy-link:hover { color: var(--accent); }
 
+/* ── Nav bar (bottom, estilo Waze) ───────────────────── */
+#nav-bar {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  border-radius: 40px;
+  padding: 10px 16px 10px 20px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.35);
+  transition: opacity var(--t);
+  white-space: nowrap;
+}
+#nav-bar.hidden { display: none; }
+
+.nav-stats { display: flex; align-items: center; gap: 10px; }
+.nav-stat   { display: flex; align-items: baseline; gap: 4px; }
+.nav-val    { font-size: 22px; font-weight: 700; color: var(--text-primary); }
+.nav-lbl    { font-size: 12px; color: var(--text-secondary); }
+.nav-divider { width: 1px; height: 28px; background: var(--info-border); }
+
+#nav-cancel {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--overlay-subtle);
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--t), color var(--t);
+}
+#nav-cancel:hover { background: #ef4444; color: #fff; }
+
 /* ── Route panel ──────────────────────────────────────── */
 #route-panel {
   padding: 14px;
@@ -791,17 +830,52 @@ html, body {
 }
 
 /* ── User sheep marker ────────────────────────────────── */
+.user-location-marker {
+  width: 44px; height: 44px;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Halo de pulso exterior */
+.user-location-marker::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.2);
+  animation: location-pulse 2s ease-out infinite;
+}
+
+/* Círculo base azul */
+.user-location-marker::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.18);
+  border: 2px solid rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12),
+              0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
 .user-sheep {
-  font-size: 26px;
+  font-size: 22px;
   line-height: 1;
-  filter: drop-shadow(0 2px 5px rgba(0,0,0,.5));
-  user-select: none;
-  animation: sheep-bounce .6s ease-in-out infinite alternate;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,.4));
+  animation: sheep-bounce .7s ease-in-out infinite alternate;
 }
 
 @keyframes sheep-bounce {
   from { transform: translateY(0); }
-  to   { transform: translateY(-3px); }
+  to   { transform: translateY(-2px); }
+}
+
+@keyframes location-pulse {
+  0%   { transform: scale(0.8); opacity: 0.8; }
+  70%  { transform: scale(1.4); opacity: 0; }
+  100% { transform: scale(1.4); opacity: 0; }
 }
 
 /* ── Scrollbars ───────────────────────────────────────── */

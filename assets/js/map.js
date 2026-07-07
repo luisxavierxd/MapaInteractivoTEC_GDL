@@ -666,21 +666,39 @@ function splitPath(path, seg, t) {
   };
 }
 
+function updateNavBar(distM, durS) {
+  const bar = document.getElementById('nav-bar');
+  if (!bar) return;
+  if (distM === null) { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+  const timeEl = document.getElementById('nav-time');
+  const distEl = document.getElementById('nav-dist');
+  const lbl = bar.querySelectorAll('.nav-lbl');
+  const mins = Math.ceil(durS / 60);
+  timeEl.textContent = mins < 1 ? '<1' : `${mins}`;
+  if (distM >= 1000) {
+    distEl.textContent = (distM / 1000).toFixed(1);
+    lbl[1].textContent = 'km';
+  } else {
+    distEl.textContent = Math.round(distM);
+    lbl[1].textContent = 'm';
+  }
+}
+
 function updateRouteProgress(lat, lng) {
   if (!currentRoutePath || _rerouting) return;
   const { seg, t, dist } = closestOnRoute(currentRoutePath, lat, lng);
 
-  // Progreso visual
+  // Progreso visual: tramo completado en gris, restante en naranja
   const { done, rest } = splitPath(currentRoutePath, seg, t);
-  if (_progressLine) _progressLine.setLatLngs(done);
-  if (_remainingLine) _remainingLine.setLatLngs(rest);
+  if (_progressLine && done.length >= 2) _progressLine.setLatLngs(done);
+  if (_remainingLine && rest.length >= 2) _remainingLine.setLatLngs(rest);
 
-  // Tiempo restante
+  // Actualiza barra inferior
   const mRem = remainingDist(currentRoutePath, seg, t);
-  const el = document.getElementById('route-time-remaining');
-  if (el) el.textContent = mRem < 72 ? '< 1 min' : `${Math.ceil(mRem / 1.2 / 60)} min`;
+  updateNavBar(mRem, mRem / 1.2);
 
-  // Rerouting si se desvió >25 m y han pasado >15 s desde el último
+  // Rerouting si se desvió >25 m y han pasado >15 s
   if (dist > 25 && Date.now() - _lastRerouteTime > 15000) {
     _lastRerouteTime = Date.now();
     _rerouting = true;
@@ -718,28 +736,27 @@ function drawRoute(latlngs) {
 
 function showRouteSummary(distM, durS) {
   const summary = document.getElementById('route-summary');
-  if (!distM) {
-    summary.classList.remove('visible');
-    return;
-  }
+  if (!distM) { summary.classList.remove('visible'); updateNavBar(null); return; }
   const dist = distM < 1000 ? `${Math.round(distM)} m` : `${(distM/1000).toFixed(1)} km`;
   const mins = Math.ceil(durS / 60);
   summary.innerHTML = `
     <div class="route-stat">
-      <span class="route-stat-label">Distancia</span>
+      <span class="route-stat-label">Distancia total</span>
       <span class="route-stat-value">${dist}</span>
     </div>
     <div class="route-stat">
-      <span class="route-stat-label">Tiempo restante</span>
-      <span class="route-stat-value" id="route-time-remaining">${mins} min</span>
+      <span class="route-stat-label">Tiempo estimado</span>
+      <span class="route-stat-value">${mins} min</span>
     </div>`;
   summary.classList.add('visible');
+  updateNavBar(distM, durS);
 }
 
 function clearRouteLayer() {
   if (routeLayer) { routeLayer.clearLayers(); map.removeLayer(routeLayer); routeLayer = null; }
   currentRoutePath = null; _progressLine = null; _remainingLine = null;
   document.getElementById('route-summary').classList.remove('visible');
+  updateNavBar(null);
 }
 
 /* ── Search ───────────────────────────────────────────── */
@@ -782,9 +799,9 @@ function updateUserMarker(lat, lng) {
   }
   const icon = L.divIcon({
     className: '',
-    html: '<div class="user-sheep">🐏</div>',
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
+    html: '<div class="user-location-marker"><div class="user-sheep">🐏</div></div>',
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
   });
   userMarker = L.marker([lat, lng], { icon, zIndexOffset: 1000 }).addTo(map);
 }
@@ -949,6 +966,12 @@ document.getElementById('swap-endpoints').addEventListener('click', () => {
   [routeFrom, routeTo] = [routeTo, routeFrom];
   updateRouteUI();
   if (routeFrom && routeTo) fetchRoute();
+});
+
+document.getElementById('nav-cancel').addEventListener('click', () => {
+  clearRouteLayer();
+  routeFrom = null; routeTo = null;
+  updateRouteUI();
 });
 
 /* ── Mobile sidebar ───────────────────────────────────── */
