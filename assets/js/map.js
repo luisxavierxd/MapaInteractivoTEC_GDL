@@ -489,21 +489,24 @@ document.getElementById('btn-directions').addEventListener('click', () => {
     switchTab('route');
   } else if (navigator.geolocation && locationPermission !== 'denied') {
     requestLocationConsent(() => {
+      startLocationWatch();
+      routeFrom = { _isLocation: true, lat: null, lng: null, name: 'Obteniendo ubicación…' };
+      updateRouteUI();
+      switchTab('route');
       navigator.geolocation.getCurrentPosition(pos => {
         const { latitude: rawLat, longitude: rawLng } = pos.coords;
         const loc = resolveLocation(rawLat, rawLng);
         userLocation = loc;
         locationPermission = 'granted';
         updateUserMarker(loc.lat, loc.lng);
-        startLocationWatch();
         routeFrom = { _isLocation: true, ...loc };
         updateRouteUI();
         fetchRoute();
-        switchTab('route');
       }, () => {
         locationPermission = 'denied';
-        switchTab('route');
-      });
+        routeFrom = null;
+        updateRouteUI();
+      }, { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 });
     });
   } else {
     switchTab('route');
@@ -592,6 +595,7 @@ function getEntries(ep) {
 
 async function fetchRoute() {
   if (!routeFrom || !routeTo) return;
+  if (routeFrom.lat === null || routeTo.lat === null) return;
   const [fromLat, fromLng] = endpointLatLng(routeFrom);
   const [toLat, toLng] = endpointLatLng(routeTo);
 
@@ -809,7 +813,12 @@ document.getElementById('locate-btn').addEventListener('click', () => requestLoc
 
 function locateUser() {
   if (!navigator.geolocation) return alert('Tu navegador no soporta geolocalización.');
+  startLocationWatch();
+  const btn = document.getElementById('locate-btn');
+  const prev = btn.textContent;
+  btn.textContent = '…'; btn.disabled = true;
   navigator.geolocation.getCurrentPosition(pos => {
+    btn.textContent = prev; btn.disabled = false;
     const { latitude: lat, longitude: lng } = pos.coords;
     const loc = resolveLocation(lat, lng);
     userLocation = loc;
@@ -818,8 +827,10 @@ function locateUser() {
     const popupText = loc.name === 'Mi ubicación' ? 'Estás aquí' : 'Fuera del campus — usando Entrada principal';
     userMarker.bindPopup(popupText).openPopup();
     map.setView([loc.lat, loc.lng], 18, { animate: true });
-    startLocationWatch();
-  }, () => alert('No se pudo obtener tu ubicación.'));
+  }, () => {
+    btn.textContent = prev; btn.disabled = false;
+    alert('No se pudo obtener tu ubicación.');
+  }, { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 });
 }
 
 document.getElementById('swap-endpoints').addEventListener('click', () => {
