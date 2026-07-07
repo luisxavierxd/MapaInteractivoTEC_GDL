@@ -709,13 +709,26 @@ function updateUserMarker(lat, lng) {
 }
 
 let _locationRefreshInterval = null;
+let _onPos = null; // referencia global para reusar en reinicio por visibilidad
+
+function stopLocationWatch() {
+  if (locationWatcher !== null) {
+    navigator.geolocation.clearWatch(locationWatcher);
+    locationWatcher = null;
+  }
+  if (_locationRefreshInterval !== null) {
+    clearInterval(_locationRefreshInterval);
+    _locationRefreshInterval = null;
+  }
+}
 
 function startLocationWatch() {
-  if (locationWatcher !== null || !navigator.geolocation) return;
+  if (!navigator.geolocation) return;
+  stopLocationWatch(); // limpia cualquier watcher anterior antes de reiniciar
 
   let lastUpdateTime = 0;
 
-  const onPos = pos => {
+  _onPos = pos => {
     lastUpdateTime = Date.now();
     const loc = resolveLocation(pos.coords.latitude, pos.coords.longitude);
     userLocation = loc;
@@ -730,24 +743,31 @@ function startLocationWatch() {
   const gpsOpts = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
 
   // Fase 1: posición de red rápida mientras el GPS calienta
-  navigator.geolocation.getCurrentPosition(onPos, () => {}, {
+  navigator.geolocation.getCurrentPosition(_onPos, () => {}, {
     enableHighAccuracy: false, maximumAge: 30000, timeout: 5000,
   });
 
-  // Fase 2: watchPosition con GPS para actualizaciones al moverse
+  // Fase 2: watchPosition con GPS
   locationWatcher = navigator.geolocation.watchPosition(
-    onPos,
+    _onPos,
     () => { locationPermission = 'denied'; },
     gpsOpts,
   );
 
-  // Fase 3: respaldo periódico — fuerza refresh si watchPosition se congela >8s
+  // Fase 3: respaldo periódico si watchPosition se congela
   _locationRefreshInterval = setInterval(() => {
     if (Date.now() - lastUpdateTime > 8000) {
-      navigator.geolocation.getCurrentPosition(onPos, () => {}, gpsOpts);
+      navigator.geolocation.getCurrentPosition(_onPos, () => {}, gpsOpts);
     }
   }, 8000);
 }
+
+// Reinicia el watcher cuando el usuario regresa a la app — el OS da posición fresca
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && locationPermission === 'granted') {
+    startLocationWatch();
+  }
+});
 
 // Llama cb(loc) en cuanto haya ubicación; inmediato si ya existe
 function onLocation(cb) {
