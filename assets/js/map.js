@@ -695,7 +695,10 @@ let locationPermission = 'unknown'; // 'unknown' | 'granted' | 'denied'
 let locationWatcher = null;
 
 function updateUserMarker(lat, lng) {
-  if (userMarker) map.removeLayer(userMarker);
+  if (userMarker) {
+    userMarker.setLatLng([lat, lng]); // mover en lugar de destruir/recrear
+    return;
+  }
   const icon = L.divIcon({
     className: '',
     html: '<div class="user-sheep">🐏</div>',
@@ -705,10 +708,15 @@ function updateUserMarker(lat, lng) {
   userMarker = L.marker([lat, lng], { icon, zIndexOffset: 1000 }).addTo(map);
 }
 
+let _locationRefreshInterval = null;
+
 function startLocationWatch() {
   if (locationWatcher !== null || !navigator.geolocation) return;
 
+  let lastUpdateTime = 0;
+
   const onPos = pos => {
+    lastUpdateTime = Date.now();
     const loc = resolveLocation(pos.coords.latitude, pos.coords.longitude);
     userLocation = loc;
     locationPermission = 'granted';
@@ -719,17 +727,26 @@ function startLocationWatch() {
     }
   };
 
-  // Fase 1: posición de red (rápida) para mostrar el borrego mientras el GPS calienta
+  const gpsOpts = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
+
+  // Fase 1: posición de red rápida mientras el GPS calienta
   navigator.geolocation.getCurrentPosition(onPos, () => {}, {
     enableHighAccuracy: false, maximumAge: 30000, timeout: 5000,
   });
 
-  // Fase 2: GPS para tracking real de movimiento — maximumAge:0 fuerza posición fresca
+  // Fase 2: watchPosition con GPS para actualizaciones al moverse
   locationWatcher = navigator.geolocation.watchPosition(
     onPos,
     () => { locationPermission = 'denied'; },
-    { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+    gpsOpts,
   );
+
+  // Fase 3: respaldo periódico — fuerza refresh si watchPosition se congela >8s
+  _locationRefreshInterval = setInterval(() => {
+    if (Date.now() - lastUpdateTime > 8000) {
+      navigator.geolocation.getCurrentPosition(onPos, () => {}, gpsOpts);
+    }
+  }, 8000);
 }
 
 // Llama cb(loc) en cuanto haya ubicación; inmediato si ya existe
