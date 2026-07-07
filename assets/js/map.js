@@ -193,7 +193,7 @@ const geoLayer = L.geoJSON(null, {
   style: feature => {
     const cat = getCategory(feature.properties);
     const c = CATS[cat];
-    return { pane: 'polygonPane', color: c.color, opacity: 1, weight: 2.5, fillColor: c.fill, fillOpacity: 0.3 };
+    return { color: c.color, opacity: 1, weight: 2.5, fillColor: c.fill, fillOpacity: 0.3 };
   },
   pointToLayer(feature, latlng) {
     const cat = getCategory(feature.properties);
@@ -398,7 +398,6 @@ function selectBuilding(feature, layer) {
 
   const isPoint = layer instanceof L.CircleMarker;
   layer.setStyle({ fillOpacity: isPoint ? 1 : 0.72 });
-  layer.bringToFront();
 
   const cat = getCategory(feature.properties);
   const c = CATS[cat];

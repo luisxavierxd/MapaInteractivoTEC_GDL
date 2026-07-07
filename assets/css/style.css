@@ -772,6 +772,10 @@ html, body {
 }
 #layer-toggle:hover { border-color: var(--border-str); }
 
+/* Leaflet solo aplica pointer-events al overlayPane SVG por defecto;
+   el circlePane personalizado necesita la misma regla */
+.leaflet-circle-pane svg { pointer-events: visiblePainted; }
+
 /* ── Selection pin ────────────────────────────────────── */
 .selection-pin {
   width: 34px; height: 34px;
