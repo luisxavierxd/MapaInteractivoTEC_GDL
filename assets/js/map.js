@@ -177,6 +177,11 @@ let routeMode = false;
 let routeFrom = null;
 let routeTo = null;
 let routeLayer = null;
+let currentRoutePath  = null; // [[lat,lng],...] de la ruta activa
+let _progressLine     = null; // polyline tramo completado
+let _remainingLine    = null; // polyline tramo restante
+let _lastRerouteTime  = 0;
+let _rerouting        = false;
 let userMarker = null;
 let userLocation = null; // { lat, lng, name } cuando se obtiene
 let selectedLayer = null;
@@ -620,20 +625,95 @@ async function fetchRoute() {
   }
 }
 
+/* ── Geometría de progreso de ruta ────────────────────── */
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function closestOnRoute(path, lat, lng) {
+  let minDist = Infinity, bestSeg = 0, bestT = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const [y1, x1] = path[i], [y2, x2] = path[i + 1];
+    const dy = y2 - y1, dx = x2 - x1;
+    const len2 = dy*dy + dx*dx;
+    let t = len2 > 0 ? ((lat - y1)*dy + (lng - x1)*dx) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const d = haversineM(lat, lng, y1 + t*dy, x1 + t*dx);
+    if (d < minDist) { minDist = d; bestSeg = i; bestT = t; }
+  }
+  return { seg: bestSeg, t: bestT, dist: minDist };
+}
+
+function remainingDist(path, seg, t) {
+  const [y1, x1] = path[seg], [y2, x2] = path[seg + 1];
+  let d = haversineM(y1 + t*(y2-y1), x1 + t*(x2-x1), y2, x2);
+  for (let i = seg + 1; i < path.length - 1; i++)
+    d += haversineM(path[i][0], path[i][1], path[i+1][0], path[i+1][1]);
+  return d;
+}
+
+function splitPath(path, seg, t) {
+  const [y1, x1] = path[seg], [y2, x2] = path[seg + 1];
+  const pivot = [y1 + t*(y2-y1), x1 + t*(x2-x1)];
+  return {
+    done: [...path.slice(0, seg + 1), pivot],
+    rest: [pivot, ...path.slice(seg + 1)],
+  };
+}
+
+function updateRouteProgress(lat, lng) {
+  if (!currentRoutePath || _rerouting) return;
+  const { seg, t, dist } = closestOnRoute(currentRoutePath, lat, lng);
+
+  // Progreso visual
+  const { done, rest } = splitPath(currentRoutePath, seg, t);
+  if (_progressLine) _progressLine.setLatLngs(done);
+  if (_remainingLine) _remainingLine.setLatLngs(rest);
+
+  // Tiempo restante
+  const mRem = remainingDist(currentRoutePath, seg, t);
+  const el = document.getElementById('route-time-remaining');
+  if (el) el.textContent = mRem < 72 ? '< 1 min' : `${Math.ceil(mRem / 1.2 / 60)} min`;
+
+  // Rerouting si se desvió >25 m y han pasado >15 s desde el último
+  if (dist > 25 && Date.now() - _lastRerouteTime > 15000) {
+    _lastRerouteTime = Date.now();
+    _rerouting = true;
+    routeFrom = { _isLocation: true, lat, lng, name: 'Mi ubicación' };
+    Promise.resolve(fetchRoute()).finally(() => { _rerouting = false; });
+  }
+}
+
 function drawRoute(latlngs) {
   clearRouteLayer();
+  currentRoutePath = latlngs;
   routeLayer = L.layerGroup().addTo(map);
 
-  const line = L.polyline(latlngs, {
+  // Tramo completado (inicialmente vacío)
+  _progressLine = L.polyline([], {
+    color: '#64748b', weight: 4, opacity: 0.45,
+    lineJoin: 'round', lineCap: 'round',
+  }).addTo(routeLayer);
+
+  // Tramo restante (ruta completa al inicio)
+  _remainingLine = L.polyline(latlngs, {
     color: '#f59e0b', weight: 5, opacity: 0.9,
     lineJoin: 'round', lineCap: 'round',
   }).addTo(routeLayer);
 
-  map.fitBounds(line.getBounds(), { padding: [60, 60] });
+  map.fitBounds(_remainingLine.getBounds(), { padding: [60, 60] });
 
   const dot = (color) => `<div style="background:${color};width:14px;height:14px;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`;
-  L.marker(latlngs[0],                  { icon: L.divIcon({ className: '', html: dot('#10b981'), iconSize: [14,14], iconAnchor: [7,7] }) }).addTo(routeLayer);
-  L.marker(latlngs[latlngs.length - 1], { icon: L.divIcon({ className: '', html: dot('#f59e0b'), iconSize: [14,14], iconAnchor: [7,7] }) }).addTo(routeLayer);
+  L.marker(latlngs[0],                  { icon: L.divIcon({ className: '', html: dot('#10b981'), iconSize: [14,14], iconAnchor: [7,7] }), interactive: false }).addTo(routeLayer);
+  L.marker(latlngs[latlngs.length - 1], { icon: L.divIcon({ className: '', html: dot('#f59e0b'), iconSize: [14,14], iconAnchor: [7,7] }), interactive: false }).addTo(routeLayer);
+
+  // Si ya hay posición, sincroniza el progreso de inmediato
+  if (userLocation) updateRouteProgress(userLocation.lat, userLocation.lng);
 }
 
 function showRouteSummary(distM, durS) {
@@ -650,14 +730,15 @@ function showRouteSummary(distM, durS) {
       <span class="route-stat-value">${dist}</span>
     </div>
     <div class="route-stat">
-      <span class="route-stat-label">Caminando ~</span>
-      <span class="route-stat-value">${mins} min</span>
+      <span class="route-stat-label">Tiempo restante</span>
+      <span class="route-stat-value" id="route-time-remaining">${mins} min</span>
     </div>`;
   summary.classList.add('visible');
 }
 
 function clearRouteLayer() {
   if (routeLayer) { routeLayer.clearLayers(); map.removeLayer(routeLayer); routeLayer = null; }
+  currentRoutePath = null; _progressLine = null; _remainingLine = null;
   document.getElementById('route-summary').classList.remove('visible');
 }
 
@@ -734,6 +815,7 @@ function startLocationWatch() {
     userLocation = loc;
     locationPermission = 'granted';
     updateUserMarker(loc.lat, loc.lng);
+    updateRouteProgress(loc.lat, loc.lng);
     if (locationCallbacks.length) {
       locationCallbacks.forEach(cb => cb(loc));
       locationCallbacks = [];
