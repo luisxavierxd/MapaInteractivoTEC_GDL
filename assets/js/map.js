@@ -724,11 +724,11 @@ function startLocationWatch() {
     enableHighAccuracy: false, maximumAge: Infinity, timeout: 500,
   });
 
-  // Fase 2: actualizaciones continuas
+  // Fase 2: actualizaciones continuas — maximumAge bajo para que se mueva en tiempo real
   locationWatcher = navigator.geolocation.watchPosition(
     onPos,
     () => { locationPermission = 'denied'; },
-    { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 }
+    { enableHighAccuracy: false, maximumAge: 3000, timeout: 10000 }
   );
 }
 
