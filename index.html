@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mapa del Borrego Merodeador</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐏</text></svg>">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
   <link rel="stylesheet" href="assets/css/style.css" />
 </head>
@@ -21,6 +22,7 @@
         </div>
         <div id="sidebar-header-btns">
           <button id="sidebar-close" title="Cerrar">×</button>
+          <button id="theme-toggle" title="Cambiar tema">☀️</button>
           <button id="locate-btn" title="Mi ubicación">⊕</button>
         </div>
       </div>
@@ -52,7 +54,10 @@
               </div>
               <button class="route-clear" id="clear-from" title="Limpiar">×</button>
             </div>
-            <div class="route-divider"></div>
+            <div class="route-swap-row">
+              <div class="route-swap-line"></div>
+              <button class="route-swap" id="swap-endpoints" title="Intercambiar origen y destino">⇅</button>
+            </div>
             <div class="route-row">
               <span class="route-dot to"></span>
               <div class="route-field">
@@ -69,6 +74,10 @@
           <button id="route-mode-btn">Activar modo ruta</button>
         </div>
       </div>
+      <footer id="sidebar-footer">
+        <p id="disclaimer">Proyecto independiente. No afiliado al Tecnológico de Monterrey. Elaborado con datos públicos de OpenStreetMap.</p>
+        <button id="privacy-link">🔒 Aviso de privacidad</button>
+      </footer>
     </aside>
 
     <main id="map-wrap">
@@ -82,11 +91,11 @@
         <h2 id="info-name"></h2>
         <div id="info-fields"></div>
         <div id="info-actions">
-          <div class="info-actions-row">
-            <button class="action-btn from-btn" id="btn-set-from">📍 Desde aquí</button>
-            <button class="action-btn to-btn" id="btn-set-to">🚩 Hasta aquí</button>
-          </div>
-          <button class="action-btn loc-btn" id="btn-from-location">📍 Ruta desde mi ubicación</button>
+          <button class="action-btn directions-btn" id="btn-directions">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            Cómo llegar
+          </button>
+          <button class="action-btn from-btn" id="btn-set-from">Desde aquí</button>
         </div>
       </div>
 
@@ -102,6 +111,48 @@
 
   </div>
   <div id="sidebar-overlay"></div>
+
+  <!-- AVISO DE PRIVACIDAD -->
+  <div id="privacy-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
+    <div id="privacy-backdrop"></div>
+    <div id="privacy-dialog">
+      <div id="privacy-header">
+        <div class="privacy-icon">🔒</div>
+        <h2 id="privacy-title">Aviso de Privacidad</h2>
+        <p>Uso de ubicación geográfica</p>
+      </div>
+      <div id="privacy-body">
+        <p class="privacy-disclaimer">⚠️ Este es un proyecto independiente, no oficial y sin afiliación con el Tecnológico de Monterrey. La información cartográfica proviene de OpenStreetMap y fuentes públicas.</p>
+        <p class="privacy-intro">Para calcular rutas dentro del campus esta app solicita acceso a tu ubicación. Antes de continuar te informamos cómo se tratan tus datos.</p>
+        <div class="privacy-item">
+          <span class="privacy-label">Responsable</span>
+          <span>Proyecto Borrego Merodeador · Campus GDL, Tec de Monterrey</span>
+        </div>
+        <div class="privacy-item">
+          <span class="privacy-label">Dato recabado</span>
+          <span>Ubicación geográfica en tiempo real (latitud y longitud)</span>
+        </div>
+        <div class="privacy-item">
+          <span class="privacy-label">Finalidad</span>
+          <span>Calcular y mostrar rutas peatonales dentro del campus universitario</span>
+        </div>
+        <div class="privacy-item">
+          <span class="privacy-label">Tratamiento</span>
+          <span>Tu ubicación <strong>se procesa únicamente en tu dispositivo</strong>. No se transmite, almacena ni comparte con servidores externos ni terceros.</span>
+        </div>
+        <div class="privacy-item">
+          <span class="privacy-label">Derechos ARCO</span>
+          <span>Puedes ejercer tus derechos de Acceso, Rectificación, Cancelación u Oposición escribiendo a <a href="mailto:luisxaviergpa@proton.me">luisxaviergpa@proton.me</a></span>
+        </div>
+        <p class="privacy-law">De conformidad con la <em>Ley Federal de Protección de Datos Personales en Posesión de los Particulares</em> (LFPDPPP) y su Reglamento.</p>
+      </div>
+      <div id="privacy-actions">
+        <button id="privacy-reject">Rechazar</button>
+        <button id="privacy-accept">Aceptar y continuar</button>
+        <button id="privacy-close">Cerrar</button>
+      </div>
+    </div>
+  </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
   <script src="assets/js/router.js"></script>

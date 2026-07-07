@@ -4,6 +4,8 @@ const CATS = {
   school:     { label: 'Preparatoria', icon: '📚', color: '#7c3aed', fill: '#8b5cf6' },
   sports:     { label: 'Deportes',     icon: '⚽', color: '#16a34a', fill: '#4ade80' },
   dorm:       { label: 'Residencias',  icon: '🏠', color: '#059669', fill: '#10b981' },
+  life:       { label: 'LIFE',         icon: '🎭', color: '#be185d', fill: '#f472b6' },
+  auditorium: { label: 'Auditorios',   icon: '🎤', color: '#7c2d12', fill: '#f97316' },
   food:       { label: 'Comida',       icon: '🍽️', color: '#b45309', fill: '#f59e0b' },
   services:   { label: 'Servicios',    icon: '🏥', color: '#0e7490', fill: '#06b6d4' },
   commercial: { label: 'Comercial',    icon: '🛒', color: '#b91c1c', fill: '#ef4444' },
@@ -18,30 +20,34 @@ function getCategory(p) {
   if (['restaurant','cafe','fast_food','food_court','ice_cream'].includes(a) || p.cuisine) return 'food';
   // OSM-tagged commercial
   if (b === 'commercial' || p.shop) return 'commercial';
-  // OSM-tagged dormitory
-  if (b === 'dormitory') return 'dorm';
+  // OSM-tagged dormitory + residencias por nombre
+  if (b === 'dormitory' || /\bresidencia/.test(n)) return 'dorm';
 
-  // Sports — name-based, checked before building=university so gradas/domo/etc. aren't academic
-  if (/alberca|atletismo|f[uú]tbol|tenis|padel|domo|gimna|borregos|e.?sport|ping|ajedrez|vestidor|ducha|gradas|cancha|futbolito|crossfit|voley|ejercicio/.test(n)) return 'sports';
+  // Sports — name-based, checked before building=university
+  if (/alberca|atletismo|f[uú]tbol|tenis|padel|domo|gimna|borregos|vestidor|ducha|gradas|cancha|crossfit|voley|ejercicio/.test(n)) return 'sports';
+
+  // Auditorios
+  if (/auditorio|congresos/.test(n)) return 'auditorium';
+
+  // LIFE — cultural y recreación no deportiva
+  if (/difusi[oó]n|cultural|kiosko|piano|m[uú]sical|hamacas|jardin|e.?sport|ping|ajedrez|futbolito/.test(n)) return 'life';
 
   // Food — named places without OSM food tags
-  if (/cafeter[ií]a|güich|guich|chilaquiles|gongcha|c[oó]rdoba|kiosko|cocina|comedor|area.de.comer|juvijues|yum/.test(n)) return 'food';
+  if (/cafeter[ií]a|güich|guich|chilaquiles|gongcha|c[oó]rdoba|cocina|comedor|area.de.comer|juvijues|yum/.test(n)) return 'food';
 
-  // Commercial — name-based (oxxo moved here from food)
+  // Commercial
   if (/tec.?store|bazar|copiroyal|papeler[ií]a|oxxo/.test(n)) return 'commercial';
 
-  // Services — access points, admin, support, cultural, infrastructure
-  if (/caseta|entrada|salida|acceso|admisi[oó]n|direcci[oó]n|rector|administrativ|bienestar|social|lactancia|locatec|tecmed|congresos|difusi[oó]n|biciclet|elevador|herramienta|impresora|mentor|soporte|it.?support|servicios?|services|mantenimiento|movilidad|planta.*(agua|tratamiento)/.test(n)) return 'services';
-  if (/auditorio|biblioteca|cosas perdidas|sal[oó]n|salas?|piano|emprendimiento/.test(n)) return 'services';
+  // Services — admin, infraestructura, soporte
+  if (/caseta|entrada|salida|acceso|admisi[oó]n|direcci[oó]n|rector|administrativ|bienestar|social|lactancia|locatec|tecmed|biciclet|elevador|herramienta|impresora|mentor|soporte|it.?support|servicios?|services|mantenimiento|movilidad|planta.*(agua|tratamiento)/.test(n)) return 'services';
+  if (/biblioteca|cosas perdidas|salas?/.test(n)) return 'services';
 
-  // Preparatoria — before building=university since some prepa buildings carry that tag
+  // Preparatoria — before building=university
   if (/prepa/.test(n) || b === 'school') return 'school';
 
-  // Academic — generic university buildings
+  // Academic
   if (b === 'university') return 'academic';
-
-  // Academic — name-based fallback for buildings missing the OSM tag
-  if (/ingenier[ií]|eiad/.test(n)) return 'academic';
+  if (/ingenier[ií]|eiad|emprendimiento|innovaci[oó]n/.test(n)) return 'academic';
 
   return 'other';
 }
@@ -74,7 +80,7 @@ function defaultStyle(layer) {
   const cat = getCategory(layer.feature.properties);
   const c = CATS[cat];
   const isPoint = layer instanceof L.CircleMarker;
-  return { color: c.color, weight: 1.5, fillColor: c.fill, fillOpacity: isPoint ? 0.7 : 0.3 };
+  return { color: c.color, opacity: 1, weight: isPoint ? 2 : 2.5, fillColor: c.fill, fillOpacity: isPoint ? 0.9 : 0.3 };
 }
 
 function humanLabel(key) {
@@ -112,21 +118,33 @@ function humanValue(key, val) {
 
 /* ── Map init ─────────────────────────────────────────── */
 const MAX_BOUNDS = L.latLngBounds([20.727, -103.462], [20.741, -103.447]);
+const ENTRADA_PRINCIPAL = { lat: 20.73151, lng: -103.45346, name: 'Entrada principal' };
+
+function resolveLocation(lat, lng) {
+  if (MAX_BOUNDS.contains([lat, lng])) return { lat, lng, name: 'Mi ubicación' };
+  return { ...ENTRADA_PRINCIPAL };
+}
 const map = L.map('map', {
   zoomControl: false,
   minZoom: 17,
+  maxZoom: 22,
   maxBounds: MAX_BOUNDS,
   maxBoundsViscosity: 1.0,
 }).setView([20.7343, -103.4559], 16);
 L.control.zoom({ position: 'topright' }).addTo(map);
 
+map.createPane('polygonPane').style.zIndex = 401;
+map.createPane('circlePane').style.zIndex  = 402;
+
 const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
+  maxZoom: 22,
+  maxNativeZoom: 19,
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 });
 
 const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 19,
+  maxZoom: 22,
+  maxNativeZoom: 19,
   attribution: 'Tiles &copy; Esri',
 });
 
@@ -160,32 +178,39 @@ let routeFrom = null;
 let routeTo = null;
 let routeLayer = null;
 let userMarker = null;
-let userLocation = null;
+let userLocation = null; // { lat, lng, name } cuando se obtiene
 let selectedLayer = null;
+let selectionMarker = null;
 
 /* ── GeoJSON layer ────────────────────────────────────── */
 const geoLayer = L.geoJSON(null, {
+  filter: feature => {
+    if (feature.geometry.type !== 'Point') return true;
+    const name = (feature.properties.name || '').toLowerCase().trim();
+    return !/^entrada |^acceso /.test(name);
+  },
   style: feature => {
     const cat = getCategory(feature.properties);
     const c = CATS[cat];
-    return { color: c.color, weight: 1.5, fillColor: c.fill, fillOpacity: 0.3 };
+    return { pane: 'polygonPane', color: c.color, opacity: 1, weight: 2.5, fillColor: c.fill, fillOpacity: 0.3 };
   },
   pointToLayer(feature, latlng) {
     const cat = getCategory(feature.properties);
     const c = CATS[cat];
     return L.circleMarker(latlng, {
-      radius: 7,
+      pane: 'circlePane',
+      radius: 8,
       color: c.color,
-      weight: 1.5,
+      weight: 2,
       fillColor: c.fill,
-      fillOpacity: 0.7,
+      fillOpacity: 0.9,
     });
   },
   onEachFeature(feature, layer) {
     layer.on('click', () => onBuildingClick(feature, layer));
     layer.on('mouseover', () => {
       if (layer !== selectedLayer)
-        layer.setStyle({ fillOpacity: layer instanceof L.CircleMarker ? 0.95 : 0.55, weight: 2.5 });
+        layer.setStyle({ fillOpacity: layer instanceof L.CircleMarker ? 1 : 0.55, weight: 2.5 });
     });
     layer.on('mouseout', () => {
       if (layer !== selectedLayer) layer.setStyle(defaultStyle(layer));
@@ -353,14 +378,40 @@ function onBuildingClick(feature, layer, fromList = false) {
   }
 }
 
+function clearSelection() {
+  if (selectedLayer) {
+    selectedLayer.setStyle(defaultStyle(selectedLayer));
+    selectedLayer = null;
+  }
+  if (selectionMarker) {
+    map.removeLayer(selectionMarker);
+    selectionMarker = null;
+  }
+}
+
 function selectBuilding(feature, layer) {
-  if (selectedLayer) selectedLayer.setStyle(defaultStyle(selectedLayer));
+  clearSelection();
 
   selectedLayer = layer;
   activeItem = feature;
 
-  layer.setStyle({ color: '#facc15', weight: 3, fillOpacity: 0.5, dashArray: null });
+  const isPoint = layer instanceof L.CircleMarker;
+  layer.setStyle({ fillOpacity: isPoint ? 1 : 0.72 });
   layer.bringToFront();
+
+  const cat = getCategory(feature.properties);
+  const c = CATS[cat];
+  const [lat, lng] = centroid(feature.geometry);
+  selectionMarker = L.marker([lat, lng], {
+    icon: L.divIcon({
+      className: '',
+      html: `<div class="selection-pin" style="border-color:${c.color}">${c.icon}</div>`,
+      iconSize: [34, 34],
+      iconAnchor: [17, 17],
+    }),
+    zIndexOffset: 950,
+    interactive: false,
+  }).addTo(map);
 
   document.querySelectorAll('.building-item').forEach(el => {
     el.classList.toggle('active', el.dataset.id === feature.properties._fid);
@@ -410,11 +461,8 @@ function showInfoPanel(feature) {
 
 document.getElementById('info-close').addEventListener('click', () => {
   document.getElementById('info-panel').classList.add('hidden');
-  if (selectedLayer) {
-    selectedLayer.setStyle(defaultStyle(selectedLayer));
-    selectedLayer = null;
-    activeItem = null;
-  }
+  clearSelection();
+  activeItem = null;
   document.querySelectorAll('.building-item').forEach(el => el.classList.remove('active'));
 });
 
@@ -426,13 +474,40 @@ document.getElementById('btn-set-from').addEventListener('click', () => {
   if (!activeItem) return;
   setRouteEndpoint('from', activeItem);
   document.getElementById('info-panel').classList.add('hidden');
-  if (routeFrom && routeTo) switchTab('route');
+  switchTab('route');
 });
-document.getElementById('btn-set-to').addEventListener('click', () => {
+document.getElementById('btn-directions').addEventListener('click', () => {
   if (!activeItem) return;
-  setRouteEndpoint('to', activeItem);
+  const destination = activeItem;
+  setRouteEndpoint('to', destination);
   document.getElementById('info-panel').classList.add('hidden');
-  if (routeFrom && routeTo) switchTab('route');
+
+  if (userLocation) {
+    routeFrom = { _isLocation: true, lat: userLocation.lat, lng: userLocation.lng, name: 'Mi ubicación' };
+    updateRouteUI();
+    fetchRoute();
+    switchTab('route');
+  } else if (navigator.geolocation && locationPermission !== 'denied') {
+    requestLocationConsent(() => {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude: rawLat, longitude: rawLng } = pos.coords;
+        const loc = resolveLocation(rawLat, rawLng);
+        userLocation = loc;
+        locationPermission = 'granted';
+        updateUserMarker(loc.lat, loc.lng);
+        startLocationWatch();
+        routeFrom = { _isLocation: true, ...loc };
+        updateRouteUI();
+        fetchRoute();
+        switchTab('route');
+      }, () => {
+        locationPermission = 'denied';
+        switchTab('route');
+      });
+    });
+  } else {
+    switchTab('route');
+  }
 });
 
 document.getElementById('clear-from').addEventListener('click', () => {
@@ -621,54 +696,136 @@ function switchTab(name) {
 }
 
 /* ── User location ────────────────────────────────────── */
-document.getElementById('locate-btn').addEventListener('click', locateUser);
+let locationPermission = 'unknown'; // 'unknown' | 'granted' | 'denied'
+let locationWatcher = null;
+
+function updateUserMarker(lat, lng) {
+  if (userMarker) map.removeLayer(userMarker);
+  const icon = L.divIcon({
+    className: '',
+    html: '<div class="user-sheep">🐏</div>',
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  });
+  userMarker = L.marker([lat, lng], { icon, zIndexOffset: 1000 }).addTo(map);
+}
+
+function startLocationWatch() {
+  if (locationWatcher !== null || !navigator.geolocation) return;
+
+  const onPos = pos => {
+    const loc = resolveLocation(pos.coords.latitude, pos.coords.longitude);
+    userLocation = loc;
+    locationPermission = 'granted';
+    updateUserMarker(loc.lat, loc.lng);
+  };
+
+  // Fase 1: usa cualquier posición cacheada para mostrar el borrego de inmediato
+  navigator.geolocation.getCurrentPosition(onPos, () => {}, {
+    enableHighAccuracy: false, maximumAge: Infinity, timeout: 500,
+  });
+
+  // Fase 2: actualizaciones continuas con caché de hasta 1 min
+  locationWatcher = navigator.geolocation.watchPosition(
+    onPos,
+    () => { locationPermission = 'denied'; },
+    { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 }
+  );
+}
+
+function applyLocationRoute(lat, lng) {
+  routeFrom = { _isLocation: true, lat, lng, name: 'Mi ubicación' };
+  routeTo = activeItem;
+  updateRouteUI();
+  fetchRoute();
+  switchTab('route');
+  document.getElementById('info-panel').classList.add('hidden');
+}
+
+/* ── Privacy consent ──────────────────────────────────── */
+const CONSENT_KEY = 'borrego-location-consent';
+
+function openPrivacyModal(viewOnly = false) {
+  const modal = document.getElementById('privacy-modal');
+  modal.dataset.mode = viewOnly ? 'view' : 'consent';
+  modal.classList.remove('hidden');
+
+  if (viewOnly) {
+    const closeBtn = document.getElementById('privacy-close');
+    const handler = () => {
+      modal.classList.add('hidden');
+      closeBtn.removeEventListener('click', handler);
+    };
+    closeBtn.addEventListener('click', handler);
+    return;
+  }
+
+  function cleanup() {
+    modal.classList.add('hidden');
+    document.getElementById('privacy-accept').removeEventListener('click', handleAccept);
+    document.getElementById('privacy-reject').removeEventListener('click', handleReject);
+  }
+  function handleAccept() { localStorage.setItem(CONSENT_KEY, 'granted'); cleanup(); }
+  function handleReject() { localStorage.setItem(CONSENT_KEY, 'denied');  cleanup(); }
+
+  document.getElementById('privacy-accept').addEventListener('click', handleAccept);
+  document.getElementById('privacy-reject').addEventListener('click', handleReject);
+}
+
+function requestLocationConsent(onAccept) {
+  const stored = localStorage.getItem(CONSENT_KEY);
+  if (stored === 'granted') { onAccept(); return; }
+  if (stored === 'denied') {
+    alert('Rechazaste el uso de ubicación. Para cambiar esto borra los datos del sitio en la configuración de tu navegador.');
+    return;
+  }
+
+  const modal = document.getElementById('privacy-modal');
+  modal.dataset.mode = 'consent';
+  modal.classList.remove('hidden');
+
+  function cleanup() {
+    modal.classList.add('hidden');
+    document.getElementById('privacy-accept').removeEventListener('click', handleAccept);
+    document.getElementById('privacy-reject').removeEventListener('click', handleReject);
+  }
+  function handleAccept() {
+    localStorage.setItem(CONSENT_KEY, 'granted');
+    cleanup();
+    onAccept();
+  }
+  function handleReject() {
+    localStorage.setItem(CONSENT_KEY, 'denied');
+    cleanup();
+  }
+
+  document.getElementById('privacy-accept').addEventListener('click', handleAccept);
+  document.getElementById('privacy-reject').addEventListener('click', handleReject);
+}
+
+document.getElementById('privacy-link').addEventListener('click', () => openPrivacyModal(true));
+
+document.getElementById('locate-btn').addEventListener('click', () => requestLocationConsent(locateUser));
 
 function locateUser() {
   if (!navigator.geolocation) return alert('Tu navegador no soporta geolocalización.');
   navigator.geolocation.getCurrentPosition(pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
-    userLocation = { lat, lng };
-    if (userMarker) map.removeLayer(userMarker);
-    const icon = L.divIcon({
-      className: '',
-      html: '<div class="user-location-dot"></div>',
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
-    });
-    userMarker = L.marker([lat, lng], { icon, zIndexOffset: 1000 })
-      .addTo(map)
-      .bindPopup('Estás aquí')
-      .openPopup();
-    map.setView([lat, lng], 18, { animate: true });
+    const loc = resolveLocation(lat, lng);
+    userLocation = loc;
+    locationPermission = 'granted';
+    updateUserMarker(loc.lat, loc.lng);
+    const popupText = loc.name === 'Mi ubicación' ? 'Estás aquí' : 'Fuera del campus — usando Entrada principal';
+    userMarker.bindPopup(popupText).openPopup();
+    map.setView([loc.lat, loc.lng], 18, { animate: true });
+    startLocationWatch();
   }, () => alert('No se pudo obtener tu ubicación.'));
 }
 
-document.getElementById('btn-from-location').addEventListener('click', () => {
-  if (!activeItem) return;
-  if (!navigator.geolocation) {
-    alert('Tu navegador no soporta geolocalización.');
-    return;
-  }
-  navigator.geolocation.getCurrentPosition(pos => {
-    const { latitude: lat, longitude: lng } = pos.coords;
-    userLocation = { lat, lng };
-
-    if (userMarker) map.removeLayer(userMarker);
-    const icon = L.divIcon({
-      className: '',
-      html: '<div class="user-location-dot"></div>',
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
-    });
-    userMarker = L.marker([lat, lng], { icon, zIndexOffset: 1000 }).addTo(map);
-
-    routeFrom = { _isLocation: true, lat, lng, name: 'Mi ubicación' };
-    routeTo = activeItem;
-    updateRouteUI();
-    fetchRoute();
-    switchTab('route');
-    document.getElementById('info-panel').classList.add('hidden');
-  }, () => alert('No se pudo obtener tu ubicación. Verifica los permisos del navegador.'));
+document.getElementById('swap-endpoints').addEventListener('click', () => {
+  [routeFrom, routeTo] = [routeTo, routeFrom];
+  updateRouteUI();
+  if (routeFrom && routeTo) fetchRoute();
 });
 
 /* ── Mobile sidebar ───────────────────────────────────── */
@@ -687,3 +844,24 @@ function closeSidebar() {
 document.getElementById('menu-btn').addEventListener('click', openSidebar);
 document.getElementById('sidebar-close').addEventListener('click', closeSidebar);
 sidebarOverlay.addEventListener('click', closeSidebar);
+
+/* ── Theme toggle ─────────────────────────────────────── */
+const themeBtn = document.getElementById('theme-toggle');
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  themeBtn.textContent = theme === 'light' ? '🌙' : '☀️';
+  themeBtn.title = theme === 'light' ? 'Modo oscuro' : 'Modo claro';
+  localStorage.setItem('borrrego-theme', theme);
+}
+
+applyTheme(localStorage.getItem('borrrego-theme') || 'dark');
+
+themeBtn.addEventListener('click', () => {
+  applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+});
+
+/* ── Auto-ubicación al cargar ─────────────────────────── */
+if (localStorage.getItem(CONSENT_KEY) === 'granted' && navigator.geolocation) {
+  startLocationWatch();
+}

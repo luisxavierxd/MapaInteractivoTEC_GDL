@@ -1,4 +1,4 @@
-{
+﻿{
     "type": "FeatureCollection",
     "features": [
         {
@@ -228,7 +228,7 @@
                 "@id": "way/154799833",
                 "building": "university",
                 "building:levels": "3",
-                "name": "Edificio 6 (Prepa)",
+                "name": "Aulas 6 (Prepa)",
                 "nohousenumber": "yes",
                 "roof:levels": "0"
             },
@@ -820,7 +820,7 @@
                 "building:levels": "3",
                 "nohousenumber": "yes",
                 "roof:levels": "0",
-                "name": "Edificio 5 (Prepa)"
+                "name": "Aulas 5 (Prepa)"
             },
             "id": "way/154879970",
             "bbox": [
@@ -1728,7 +1728,7 @@
                 "building": "university",
                 "building:levels": "4",
                 "layer": "1",
-                "name": "Edificio 1",
+                "name": "Aulas 1",
                 "nohousenumber": "yes"
             },
             "id": "way/1097437985",
@@ -1857,7 +1857,7 @@
                 "building": "university",
                 "building:levels": "4",
                 "layer": "1",
-                "name": "Edificio 1-2",
+                "name": "Aulas 1-2",
                 "nohousenumber": "yes"
             },
             "id": "way/1097437986",
@@ -1915,7 +1915,7 @@
                 "building": "university",
                 "building:levels": "4",
                 "layer": "1",
-                "name": "Edificio 2"
+                "name": "Aulas 2"
             },
             "id": "way/1097437987",
             "bbox": [
@@ -2039,7 +2039,7 @@
                 "building": "university",
                 "building:levels": "4",
                 "layer": "1",
-                "name": "Edificio 3-2"
+                "name": "Aulas 3-2"
             },
             "id": "way/1097437988",
             "bbox": [
@@ -2090,7 +2090,7 @@
                 "@id": "way/1097437989",
                 "building": "university",
                 "building:levels": "4",
-                "name": "Edificio 3",
+                "name": "Aulas 3",
                 "nohousenumber": "yes"
             },
             "id": "way/1097437989",
@@ -2222,7 +2222,7 @@
                 "@id": "way/1097437990",
                 "building": "university",
                 "building:levels": "4",
-                "name": "Edificio 4-3",
+                "name": "Aulas 4-3",
                 "nohousenumber": "yes"
             },
             "id": "way/1097437990",
@@ -2278,7 +2278,7 @@
                 "@id": "way/1097437991",
                 "building": "university",
                 "building:levels": "4",
-                "name": "Edificio 4",
+                "name": "Aulas 4",
                 "nohousenumber": "yes"
             },
             "id": "way/1097437991",
