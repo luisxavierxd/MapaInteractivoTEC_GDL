@@ -103,6 +103,7 @@ html, body {
 #app {
   display: flex;
   height: 100vh;
+  height: 100dvh; /* excluye barra del navegador en iOS Safari */
   overflow: hidden;
 }
 
