@@ -256,6 +256,13 @@ fetch('data/campus.geojson')
     geoLayer.addData(data);
     geoLayer.addTo(map);
     map.fitBounds(geoLayer.getBounds(), { padding: [20, 20] });
+    // Desplaza el mapa ~150 m al este para que el campus quede centrado visualmente
+    map.once('moveend', () => {
+      const zoom = map.getZoom();
+      const lat = map.getCenter().lat;
+      const metersPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
+      map.panBy([Math.round(150 / metersPerPx), 0], { animate: false });
+    });
     buildFilterChips();
     renderList(allFeatures);
   })
@@ -673,8 +680,13 @@ function splitPath(path, seg, t) {
 function updateNavBar(distM, durS) {
   const bar = document.getElementById('nav-bar');
   if (!bar) return;
-  if (distM === null) { bar.classList.add('hidden'); return; }
+  if (distM === null) {
+    bar.classList.add('hidden');
+    document.getElementById('map-wrap').classList.remove('nav-active');
+    return;
+  }
   bar.classList.remove('hidden');
+  document.getElementById('map-wrap').classList.add('nav-active');
   const timeEl = document.getElementById('nav-time');
   const distEl = document.getElementById('nav-dist');
   const lbl = bar.querySelectorAll('.nav-lbl');
@@ -728,7 +740,7 @@ function drawRoute(latlngs) {
     lineJoin: 'round', lineCap: 'round',
   }).addTo(routeLayer);
 
-  map.fitBounds(_remainingLine.getBounds(), { padding: [60, 60] });
+  map.fitBounds(_remainingLine.getBounds(), { padding: [60, 60], animate: true, duration: 0.6 });
 
   const dot = (color) => `<div style="background:${color};width:14px;height:14px;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`;
   L.marker(latlngs[0],                  { icon: L.divIcon({ className: '', html: dot('#10b981'), iconSize: [14,14], iconAnchor: [7,7] }), interactive: false }).addTo(routeLayer);

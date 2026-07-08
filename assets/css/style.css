@@ -831,6 +831,10 @@ html, body {
 }
 #layer-toggle:hover { border-color: var(--border-str); }
 
+/* Elevar botones cuando el nav bar está activo */
+#map-wrap.nav-active #layer-toggle { bottom: 90px; }
+#map-wrap.nav-active #locate-btn   { bottom: 134px; }
+
 /* El SVG del circlePane cubre todo el mapa; debe pasar eventos al overlayPane
    excepto en los paths de circles interactivos */
 .leaflet-circle-pane svg { pointer-events: none; }
