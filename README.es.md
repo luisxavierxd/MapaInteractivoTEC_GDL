@@ -10,15 +10,18 @@ Mapa interactivo del Campus Guadalajara del Tecnológico de Monterrey para ayuda
 
 ## Funcionalidades
 
-- **Mapa de edificios** — polígonos y POIs con código de color por categoría: Académico, Preparatoria, Deportes, Residencias, LIFE, Comida, Servicios, Comercial, Auditorios, Otros
-- **Búsqueda y filtros** — búsqueda por nombre, filtro por categoría
-- **Panel de info** — al hacer clic en un edificio se muestran sus detalles; el edificio seleccionado se resalta con un pin de categoría en su centroide
-- **Navegación peatonal** — router propio sobre los caminos del campus dibujados a mano; fallback a OSRM si no hay datos disponibles
-- **Ubicación en vivo** — marcador borrego 🐏 actualizado continuamente con `watchPosition`; se inicia automáticamente en visitas repetidas; si el usuario está fuera del campus, se usa la entrada principal como referencia
+- **Mapa de edificios** — polígonos y POIs con código de color por categoría: Académico, Preparatoria, Deportes, Residencias, LIFE, Auditorios, Comida, Servicios, Comercial, Otros
+- **Búsqueda y filtros** — búsqueda por nombre, filtro por categoría con toggle (clic en categoría activa para deseleccionar)
+- **Panel de info** — clic en edificio muestra sus detalles; resaltado con pin de categoría en su centroide sin opacar los demás
+- **Navegación peatonal** — router propio sobre caminos dibujados a mano; fallback a OSRM si no hay datos locales
+  - Barra de progreso inferior (estilo Waze) con tiempo y distancia restantes en tiempo real
+  - Línea de ruta dividida: tramo recorrido (gris) y tramo pendiente (naranja)
+  - Rerouting automático si el usuario se desvía más de 25 m
+- **Ubicación en vivo** — marcador borrego 🐏 con círculo azul y pulso animado; GPS de alta precisión con `watchPosition`; se inicia automáticamente en visitas repetidas; respaldo de red + intervalo de refresco si el GPS se congela
 - **Modo claro / oscuro** con toggle persistente entre sesiones
-- **Toggleo satélite / mapa de calles**
+- **Toggle satélite / mapa de calles**
 - **Aviso de privacidad** (cumple LFPDPPP) con consentimiento persistente y botón siempre visible
-- **Diseño responsivo** para móvil con sidebar
+- **Diseño responsivo para móvil** — sidebar deslizable, panel de info compacto sin scroll, cierre automático al seleccionar edificio, botones de ubicación y capa integrados en el mapa
 
 ## Stack
 

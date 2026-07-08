@@ -10,15 +10,18 @@ An interactive map of Tecnológico de Monterrey's Guadalajara campus to help stu
 
 ## Features
 
-- **Building map** — polygons and POIs color-coded by category: Academic, Preparatoria, Sports, Dorms, LIFE, Food, Services, Commercial, Auditoriums, Other
-- **Search & filter** — search by name, filter by category
-- **Info panel** — click any building to see details; selected building is highlighted with a category pin marker
+- **Building map** — polygons and POIs color-coded by category: Academic, Preparatoria, Sports, Dorms, LIFE, Auditoriums, Food, Services, Commercial, Other
+- **Search & filter** — search by name, filter by category with toggle (click active category to deselect)
+- **Info panel** — click any building to see details; selected building is highlighted with a category pin marker without dimming others
 - **Walking navigation** — custom on-campus router using hand-drawn walkable paths; falls back to OSRM public routing if unavailable
-- **Live location** — 🐏 sheep marker updated continuously via `watchPosition`; auto-starts on repeat visits; falls back to main entrance when outside campus bounds
+  - Waze-style bottom bar with live remaining time and distance
+  - Split route line: completed section (grey) and remaining section (orange)
+  - Automatic rerouting when user deviates more than 25 m from the route
+- **Live location** — 🐏 sheep marker with animated blue circle and pulse; high-accuracy GPS via `watchPosition`; auto-starts on repeat visits; network fallback + refresh interval if GPS stalls
 - **Dark / light theme** toggle, persisted across sessions
 - **Satellite / street map toggle**
 - **Privacy notice** (LFPDPPP-compliant) with persistent consent and always-accessible button
-- **Mobile-friendly** sidebar layout
+- **Mobile-friendly** — slide-in sidebar, compact no-scroll info panel, auto-close on building selection, locate and layer buttons integrated into the map view
 
 ## Stack
 
