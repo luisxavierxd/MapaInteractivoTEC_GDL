@@ -1149,8 +1149,8 @@ html, body {
   #locate-btn   { bottom: 120px; }
 
   /* Elevar botones cuando nav bar está activo (mobile — sobreescribe los de arriba) */
-  #map-wrap.nav-active #layer-toggle { bottom: 130px; }
-  #map-wrap.nav-active #locate-btn   { bottom: 174px; }
+  #map-wrap.nav-active #layer-toggle { bottom: 170px; }
+  #map-wrap.nav-active #locate-btn   { bottom: 214px; }
 
   .action-btn { padding: 13px 8px; font-size: 13px; }
   .tab { padding: 12px; }
