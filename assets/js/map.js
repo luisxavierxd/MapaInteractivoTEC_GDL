@@ -126,7 +126,7 @@ function resolveLocation(lat, lng) {
 }
 const map = L.map('map', {
   zoomControl: false,
-  minZoom: 15,
+  minZoom: 16,
   maxZoom: 22,
   maxBounds: MAX_BOUNDS,
   maxBoundsViscosity: 1.0,

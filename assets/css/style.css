@@ -1114,17 +1114,19 @@ html, body {
     width: auto;
     transform: none;
     border-radius: 16px;
-    max-height: 80vh;
-    overflow-y: auto;
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    overflow: hidden;
+    padding: 14px 14px max(14px, env(safe-area-inset-bottom));
   }
   #info-panel.hidden {
     opacity: 0;
     pointer-events: none;
     transform: translateY(12px);
   }
+  #info-fields { display: none; }
+  #info-name   { font-size: 16px; margin: 4px 0 10px; }
   #info-actions {
     flex-direction: row;
+    margin-top: 0;
   }
   .directions-btn { flex: 2; }
   .from-btn       { flex: 1; font-size: 12px; padding: 10px 8px; }
