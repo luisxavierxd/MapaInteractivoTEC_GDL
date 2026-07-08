@@ -261,7 +261,7 @@ fetch('data/campus.geojson')
       const zoom = map.getZoom();
       const lat = map.getCenter().lat;
       const metersPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
-      map.panBy([Math.round(150 / metersPerPx), 0], { animate: false });
+      map.panBy([-Math.round(150 / metersPerPx), 0], { animate: false });
     });
     buildFilterChips();
     renderList(allFeatures);
@@ -740,7 +740,7 @@ function drawRoute(latlngs) {
     lineJoin: 'round', lineCap: 'round',
   }).addTo(routeLayer);
 
-  map.fitBounds(_remainingLine.getBounds(), { padding: [60, 60], animate: true, duration: 0.6 });
+  map.flyToBounds(_remainingLine.getBounds(), { padding: [60, 60], duration: 0.8 });
 
   const dot = (color) => `<div style="background:${color};width:14px;height:14px;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`;
   L.marker(latlngs[0],                  { icon: L.divIcon({ className: '', html: dot('#10b981'), iconSize: [14,14], iconAnchor: [7,7] }), interactive: false }).addTo(routeLayer);

@@ -831,7 +831,7 @@ html, body {
 }
 #layer-toggle:hover { border-color: var(--border-str); }
 
-/* Elevar botones cuando el nav bar está activo */
+/* Elevar botones cuando el nav bar está activo (desktop) */
 #map-wrap.nav-active #layer-toggle { bottom: 90px; }
 #map-wrap.nav-active #locate-btn   { bottom: 134px; }
 
@@ -1147,6 +1147,10 @@ html, body {
 
   #layer-toggle { bottom: 76px; }
   #locate-btn   { bottom: 120px; }
+
+  /* Elevar botones cuando nav bar está activo (mobile — sobreescribe los de arriba) */
+  #map-wrap.nav-active #layer-toggle { bottom: 130px; }
+  #map-wrap.nav-active #locate-btn   { bottom: 174px; }
 
   .action-btn { padding: 13px 8px; font-size: 13px; }
   .tab { padding: 12px; }
