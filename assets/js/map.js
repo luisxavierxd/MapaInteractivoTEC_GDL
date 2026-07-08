@@ -126,7 +126,7 @@ function resolveLocation(lat, lng) {
 }
 const map = L.map('map', {
   zoomControl: false,
-  minZoom: 17,
+  minZoom: 15,
   maxZoom: 22,
   maxBounds: MAX_BOUNDS,
   maxBoundsViscosity: 1.0,
@@ -381,6 +381,7 @@ function onBuildingClick(feature, layer, fromList = false) {
   if (fromList) {
     const [lat, lng] = centroid(feature.geometry);
     map.setView([lat, lng], Math.max(map.getZoom(), 18), { animate: true });
+    if (window.innerWidth <= 640) closeSidebar();
   }
 }
 
@@ -987,7 +988,9 @@ function closeSidebar() {
   sidebarOverlay.classList.remove('visible');
 }
 
-document.getElementById('menu-btn').addEventListener('click', openSidebar);
+document.getElementById('menu-btn').addEventListener('click', () => {
+  sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+});
 document.getElementById('sidebar-close').addEventListener('click', closeSidebar);
 sidebarOverlay.addEventListener('click', closeSidebar);
 
