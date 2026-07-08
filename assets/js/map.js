@@ -249,7 +249,10 @@ fetch('data/campus.geojson')
     data.features.forEach((f, i) => {
       f.properties._fid = f.properties['@id'] || `local_${i}`;
     });
-    allFeatures = data.features;
+    allFeatures = data.features.filter(f => {
+      if (f.geometry.type !== 'Point') return true;
+      return !/^entrada |^acceso /i.test((f.properties.name || '').trim());
+    });
     geoLayer.addData(data);
     geoLayer.addTo(map);
     map.fitBounds(geoLayer.getBounds(), { padding: [20, 20] });
@@ -272,7 +275,7 @@ function buildFilterChips() {
     btn.dataset.filter = key;
     btn.textContent = label;
     if (key !== 'all') btn.style.setProperty('--chip-color', CATS[key].fill);
-    btn.addEventListener('click', () => applyFilter(key));
+    btn.addEventListener('click', () => applyFilter(activeFilter === key && key !== 'all' ? 'all' : key));
     return btn;
   };
 
