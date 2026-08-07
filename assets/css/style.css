@@ -414,6 +414,8 @@ button { font-family: inherit; cursor: pointer; color: inherit; }
   transition: opacity .2s ease, transform .2s ease;
 }
 #info-panel.hidden { opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(10px); }
+/* Se eleva por encima de la barra de navegación activa */
+body.nav-active #info-panel { bottom: calc(var(--sp-4) + var(--nav-h, 72px) + var(--sp-2)); }
 #info-close { position: absolute; top: var(--sp-3); right: var(--sp-3); }
 #info-category {
   display: inline-flex; align-items: center; gap: 5px;
@@ -539,6 +541,7 @@ button { font-family: inherit; cursor: pointer; color: inherit; }
     width: auto; transform: none;
   }
   #info-panel.hidden { transform: translateY(12px); }
+  body.nav-active #info-panel { bottom: calc(18dvh + var(--sp-4) + var(--nav-h, 72px) + var(--sp-2)); }
 
   #nav-bar { left: var(--sp-3); right: var(--sp-3); width: auto; transform: none; bottom: calc(18dvh + var(--sp-4)); }
 

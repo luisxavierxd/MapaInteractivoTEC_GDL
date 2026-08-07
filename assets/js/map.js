@@ -161,8 +161,7 @@ $('meta-theme-color').setAttribute('content', theme === 'dark' ? '#14181B' : '#F
 const map = L.map('map', {
   preferCanvas: true,            // 147 features: canvas > SVG en gama media
   zoomControl: false,
-  minZoom: 15, maxZoom: 20,
-  maxBoundsViscosity: 0.8,
+  minZoom: 3, maxZoom: 20,       // zoom libre; el botón de centrar regresa al campus
   attributionControl: true,
 }).setView([20.7347, -103.4538], 16);
 
@@ -173,6 +172,9 @@ $('layer-toggle').addEventListener('click', () => {
   basemapKind = basemapKind === 'satelite' ? 'calles' : 'satelite';
   save(LS.basemap, basemapKind);
   applyBasemap();
+});
+$('recenter-btn').addEventListener('click', () => {
+  if (campusBounds) map.fitBounds(campusBounds, { padding: [24, 24], animate: !REDUCED_MOTION() });
 });
 
 /* ── Estilos (opacidad diferencial, Fase 2.1) ──────────────── */
@@ -208,6 +210,7 @@ let fuse = null;
 let activeFilter = 'all';
 let selectedLayer = null, activeFeature = null;
 let userLocation = null, userMarker = null, userHeading = null;
+let campusBounds = null;      // encuadre del campus para el botón de centrar
 const registry = new Map();   // _fid -> { feature, layer, item }
 
 /* ── Capa GeoJSON ──────────────────────────────────────────── */
@@ -278,9 +281,10 @@ fetch('data/campus.geojson')
     // pone al final del orden de dibujo, así son visibles y seleccionables
     // aunque caigan dentro de un polígono (el hit-test elige el último).
     pointsToFront();
-    const bounds = geoLayer.getBounds().pad(0.25);
-    map.setMaxBounds(bounds);
-    map.fitBounds(geoLayer.getBounds(), { padding: [24, 24] });
+    // Sin maxBounds: el usuario puede moverse/zoom libremente; el botón de
+    // centrar (recenter) reencuadra el campus cuando quiera.
+    campusBounds = geoLayer.getBounds();
+    map.fitBounds(campusBounds, { padding: [24, 24] });
 
     // Índice de búsqueda (Fase 4.1)
     if (window.Fuse) fuse = new Fuse(buildings, {
@@ -674,6 +678,9 @@ function showNav(distM, toName) {
   $('nav-dist').textContent = fmtDist(distM);
   $('nav-to').textContent = `Llegando a ${toName || '…'}`;
   $('nav-bar').hidden = false;
+  // Eleva la ficha de edificio por encima de la barra de navegación activa.
+  document.body.classList.add('nav-active');
+  document.body.style.setProperty('--nav-h', $('nav-bar').offsetHeight + 'px');
   // Deep link compartible cuando ambos extremos son edificios (Fase 9.1)
   if (routeFrom?.feature && routeTo?.feature) setDeepLink({ from: shortId(routeFrom.feature), to: shortId(routeTo.feature) });
   startNavWatch();
@@ -689,6 +696,7 @@ function clearRoute() {
   clearRouteLayer();
   $('route-summary').hidden = true; $('route-hint').hidden = false;
   $('nav-bar').hidden = true; stopNavWatch();
+  document.body.classList.remove('nav-active');
   setDeepLink({});
 }
 $('nav-cancel').addEventListener('click', () => { routeFrom = routeTo = null; clearRoute(); updateRouteUI(); closeRouteView(); });
