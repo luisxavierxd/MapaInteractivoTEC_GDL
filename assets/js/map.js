@@ -575,7 +575,8 @@ document.addEventListener('keydown', (e) => {
 
 /* ── Flujo de ruta (Fase 6) ────────────────────────────────── */
 let routeFrom = null, routeTo = null, routeLayer = null, routeSelecting = null; // 'from'|'to'|'auto'
-let navWatchId = null, navPath = null;
+let navPath = null, casingLine = null, doneLine = null, pendingLine = null;
+let watchId = null;   // watchPosition persistente: avatar que sigue + progreso de ruta
 
 function shortId(f) { return normalize(f.properties.name || f.properties._fid).replace(/\s+/g, '-').slice(0, 40); }
 function epLatLng(ep) { return ep._isLocation ? [ep.lat, ep.lng] : ep.feature.properties._center; }
@@ -678,18 +679,22 @@ function drawRoute(latlngs) {
   clearRouteLayer();
   navPath = latlngs;
   routeLayer = L.layerGroup().addTo(map);
-  // Casing blanco debajo para legibilidad sobre cualquier basemap (Fase 6.3)
-  L.polyline(latlngs, { color: cssVar('--route-casing'), weight: 10, opacity: 1, lineJoin: 'round', lineCap: 'round' }).addTo(routeLayer);
-  L.polyline(latlngs, { color: cssVar('--c-accent'), weight: 6, opacity: 1, lineJoin: 'round', lineCap: 'round' }).addTo(routeLayer);
+  // Tres líneas superpuestas (Fase 6.3): casing blanco de fondo, tramo
+  // recorrido (atenuado) y tramo pendiente (acento). El split se actualiza
+  // conforme el usuario avanza (updateRouteProgress).
+  casingLine  = L.polyline(latlngs, { color: cssVar('--route-casing'), weight: 10, opacity: 1, lineJoin: 'round', lineCap: 'round' }).addTo(routeLayer);
+  doneLine    = L.polyline([],      { color: cssVar('--route-done'),   weight: 6,  opacity: .5, lineJoin: 'round', lineCap: 'round' }).addTo(routeLayer);
+  pendingLine = L.polyline(latlngs, { color: cssVar('--c-accent'),     weight: 6,  opacity: 1,  lineJoin: 'round', lineCap: 'round' }).addTo(routeLayer);
   // Marcadores: origen círculo hueco, destino pin sólido
-  L.marker(latlngs[0], { icon: L.divIcon({ className: '', html: `<div style="width:14px;height:14px;border:3px solid ${cssVar('--route-origin')};background:${cssVar('--c-bg')};border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`, iconSize: [14,14], iconAnchor: [7,7] }) }).addTo(routeLayer);
-  L.marker(latlngs[latlngs.length-1], { icon: L.divIcon({ className: '', html: `<div style="width:16px;height:16px;background:${cssVar('--c-accent')};border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(45deg);box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`, iconSize: [16,16], iconAnchor: [8,8] }) }).addTo(routeLayer);
+  L.marker(latlngs[0], { interactive: false, icon: L.divIcon({ className: '', html: `<div style="width:14px;height:14px;border:3px solid ${cssVar('--route-origin')};background:${cssVar('--c-bg')};border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`, iconSize: [14,14], iconAnchor: [7,7] }) }).addTo(routeLayer);
+  L.marker(latlngs[latlngs.length-1], { interactive: false, icon: L.divIcon({ className: '', html: `<div style="width:16px;height:16px;background:${cssVar('--c-accent')};border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(45deg);box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`, iconSize: [16,16], iconAnchor: [8,8] }) }).addTo(routeLayer);
   const isMobile = mq('(max-width:768px)').matches;
   map.fitBounds(L.polyline(latlngs).getBounds(), {
     paddingTopLeft: isMobile ? [30, 30] : [$('sidebar').offsetWidth + 30, 30],
     paddingBottomRight: [30, isMobile ? Math.round(window.innerHeight * 0.35) : 30],
     animate: !REDUCED_MOTION(),
   });
+  updateRouteProgress();   // pinta el avance inmediato si ya hay ubicación
 }
 function showNav(distM, toName) {
   $('route-summary').hidden = false;
@@ -704,7 +709,6 @@ function showNav(distM, toName) {
   document.body.style.setProperty('--nav-h', $('nav-bar').offsetHeight + 'px');
   // Deep link compartible cuando ambos extremos son edificios (Fase 9.1)
   if (routeFrom?.feature && routeTo?.feature) setDeepLink({ from: shortId(routeFrom.feature), to: shortId(routeTo.feature) });
-  startNavWatch();
 }
 function showRouteError() {
   clearRouteLayer();
@@ -712,71 +716,107 @@ function showRouteError() {
   $('route-summary').hidden = false;
   $('route-summary').innerHTML = `<div class="rs-stat-label" style="text-transform:none">No pudimos calcular la ruta. Verifica que ambos puntos estén dentro del campus.</div>`;
 }
-function clearRouteLayer() { if (routeLayer) { routeLayer.clearLayers(); map.removeLayer(routeLayer); routeLayer = null; } navPath = null; }
+function clearRouteLayer() {
+  if (routeLayer) { routeLayer.clearLayers(); map.removeLayer(routeLayer); routeLayer = null; }
+  navPath = casingLine = doneLine = pendingLine = null;
+}
 function clearRoute() {
   clearRouteLayer();
   $('route-summary').hidden = true; $('route-hint').hidden = false;
-  $('nav-bar').hidden = true; stopNavWatch();
+  $('nav-bar').hidden = true;
   document.body.classList.remove('nav-active');
   setDeepLink({});
 }
 $('nav-cancel').addEventListener('click', () => { routeFrom = routeTo = null; clearRoute(); updateRouteUI(); closeRouteView(); });
 
-// Recalcular al desviarse >25 m (Fase 6.2)
-function startNavWatch() {
-  if (!navigator.geolocation || navWatchId != null) return;
-  navWatchId = navigator.geolocation.watchPosition(pos => {
-    const { latitude: lat, longitude: lng } = pos.coords;
-    userLocation = { lat, lng }; drawUser();
-    if (!navPath || !routeFrom || !routeFrom._isLocation) return;
-    let min = Infinity;
-    for (const [plat, plng] of navPath) min = Math.min(min, haversine(lat, lng, plat, plng));
-    if (min > 25) {
-      $('nav-to').innerHTML = '<span class="recalc">Recalculando…</span>';
-      routeFrom = { _isLocation: true, lat, lng, name: 'Mi ubicación' };
-      fetchRoute(true);
-    }
-  }, () => {}, { enableHighAccuracy: true, maximumAge: 5000 });
+/* ── Avance de la ruta (tramo recorrido vs pendiente, Fase 6.3) ─ */
+function pathLength(p) { let d = 0; for (let i = 0; i < p.length - 1; i++) d += haversine(p[i][0], p[i][1], p[i+1][0], p[i+1][1]); return d; }
+// Proyecta [lat,lng] sobre el segmento a→b (equirectangular local).
+function projSeg(p, a, b) {
+  const cos = Math.cos(a[0] * Math.PI / 180);
+  const bx = (b[1]-a[1])*cos, by = b[0]-a[0];
+  const px = (p[1]-a[1])*cos, py = p[0]-a[0];
+  const len2 = bx*bx + by*by;
+  let t = len2 ? (px*bx + py*by) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const point = [a[0] + t*(b[0]-a[0]), a[1] + t*(b[1]-a[1])];
+  return { point, dist: haversine(p[0], p[1], point[0], point[1]) };
 }
-function stopNavWatch() { if (navWatchId != null) { navigator.geolocation.clearWatch(navWatchId); navWatchId = null; } }
+function splitPath(path, loc) {
+  let best = { dist: Infinity, i: 0, point: path[0] };
+  for (let i = 0; i < path.length - 1; i++) {
+    const r = projSeg(loc, path[i], path[i+1]);
+    if (r.dist < best.dist) best = { dist: r.dist, i, point: r.point };
+  }
+  const done = path.slice(0, best.i + 1).concat([best.point]);
+  const pending = [best.point].concat(path.slice(best.i + 1));
+  return { done, pending, remaining: pathLength(pending), offRoute: best.dist };
+}
+function updateRouteProgress() {
+  if (!navPath || !pendingLine) return;
+  // El avance (recorrido vs pendiente) solo aplica cuando navegas desde tu
+  // ubicación; en rutas edificio→edificio se muestra toda la ruta pendiente.
+  const following = routeFrom && routeFrom._isLocation && userLocation;
+  if (!following) { doneLine.setLatLngs([]); pendingLine.setLatLngs(navPath); casingLine.setLatLngs(navPath); return; }
+  const s = splitPath(navPath, [userLocation.lat, userLocation.lng]);
+  // Desvío grande y con origen = ubicación → recalcular (Fase 6.2)
+  if (s.offRoute > 25 && routeFrom && routeFrom._isLocation) {
+    $('nav-to').innerHTML = '<span class="recalc">Recalculando…</span>';
+    routeFrom = { _isLocation: true, lat: userLocation.lat, lng: userLocation.lng, name: 'Mi ubicación' };
+    fetchRoute(true);
+    return;
+  }
+  doneLine.setLatLngs(s.done);
+  pendingLine.setLatLngs(s.pending);
+  casingLine.setLatLngs(s.pending);
+  $('nav-dist').textContent = fmtDist(s.remaining);
+  $('nav-time').textContent = fmtTime(s.remaining);
+}
 
-/* ── Geolocalización + rumbo (Fases 5.2 / 9.2) ─────────────── */
-// Devuelve la ubicación (cacheada, o la pide). force=true fuerza refetch.
+/* ── Ubicación en vivo (Fases 5.2 / 9.2) ───────────────────── */
+// Aplica snap a la entrada si estás fuera, dibuja el avatar 🐏, refresca la
+// lista la primera vez y avanza la ruta si hay una activa.
+function setUserLocation(rawLat, rawLng) {
+  let lat = rawLat, lng = rawLng;
+  if (campusBounds && mainEntrance && !campusBounds.pad(0.15).contains([lat, lng])) [lat, lng] = mainEntrance;
+  const first = !userLocation;
+  userLocation = { lat, lng };
+  drawUser();
+  if (first) renderList();
+  if (navPath) updateRouteProgress();
+  return userLocation;
+}
+// watchPosition persistente: el avatar aparece al cargar y sigue al usuario.
+function startWatch() {
+  if (watchId != null || !navigator.geolocation) return;
+  watchId = navigator.geolocation.watchPosition(
+    pos => setUserLocation(pos.coords.latitude, pos.coords.longitude),
+    () => {},
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+  );
+}
+// Petición puntual (para cuando aún no hay fix): alta y luego baja precisión.
 function getUserLocation(force) {
   if (userLocation && !force) return Promise.resolve(userLocation);
   return new Promise((resolve) => {
     if (!navigator.geolocation) { resolve(null); return; }
-    const ok = pos => {
-      let lat = pos.coords.latitude, lng = pos.coords.longitude;
-      // Fuera del campus → ancla en la entrada principal (como hace la ruta).
-      if (campusBounds && mainEntrance && !campusBounds.pad(0.15).contains([lat, lng])) {
-        [lat, lng] = mainEntrance;
-      }
-      userLocation = { lat, lng }; drawUser();
-      renderList();   // muestra distancia/tiempo en la lista al obtener ubicación (por cualquier vía)
-      resolve(userLocation);
-    };
-    // 1º alta precisión (GPS en móvil). Si falla/expira, 2º baja precisión
-    // (red/IP) que es mucho más fiable en escritorio. Solo null si ambas fallan.
+    const ok = pos => resolve(setUserLocation(pos.coords.latitude, pos.coords.longitude));
     navigator.geolocation.getCurrentPosition(
       ok,
-      () => navigator.geolocation.getCurrentPosition(
-        ok, () => resolve(null),
-        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
-      ),
+      () => navigator.geolocation.getCurrentPosition(ok, () => resolve(null), { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }),
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
     );
   });
 }
+// El botón de ubicación SOLO centra en tu posición (el avatar ya vive por el watch).
 $('locate-btn').addEventListener('click', async () => {
-  if (!navigator.geolocation) { alert('Tu navegador no soporta geolocalización.'); return; }
+  startWatch();
   const btn = $('locate-btn');
-  btn.classList.add('locating');
-  const loc = await getUserLocation(true);   // siempre refresca al pulsar localizar
-  btn.classList.remove('locating');
+  let loc = userLocation;
+  if (!loc) { btn.classList.add('locating'); loc = await getUserLocation(true); btn.classList.remove('locating'); }
   if (!loc) { alert('No se pudo obtener tu ubicación. Revisa los permisos.'); return; }
   map.setView([loc.lat, loc.lng], Math.max(map.getZoom(), 18), { animate: !REDUCED_MOTION() });
-  requestHeading();   // renderList ya lo hizo getUserLocation
+  requestHeading();   // el rumbo (iOS) requiere un gesto: aquí sí lo hay
 });
 function drawUser() {
   if (!userLocation) return;
@@ -866,6 +906,7 @@ function closeOnboard() {
   onboard.hidden = true; releaseFocus();
   save(LS.onboard, '1');
   if (mq('(max-width:768px)').matches) snapSheet(1);
+  startWatch();   // tras aceptar el aviso de privacidad, activa el avatar en vivo
 }
 $('onboard-accept').addEventListener('click', closeOnboard);
 
@@ -887,6 +928,7 @@ function trapFocus(el) {
 function releaseFocus() { if (_trapHandler) document.removeEventListener('keydown', _trapHandler, true); _trapHandler = null; if (_lastFocus && _lastFocus.focus) _lastFocus.focus(); }
 
 if (!load(LS.onboard)) openOnboard();
+else startWatch();   // visitas siguientes: avatar en vivo desde el arranque
 
 /* ── Deep links (Fase 9.1) ─────────────────────────────────── */
 function setDeepLink(params) {
