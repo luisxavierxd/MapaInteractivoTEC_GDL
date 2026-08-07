@@ -4313,7 +4313,7 @@
                 ]
             },
             "properties": {
-                "name": "Salas de lactancia 3° piso (o 2° no me acuerdo)"
+                "name": "Salas de lactancia 3° piso"
             },
             "bbox": [
                 -103.45691,
@@ -4899,7 +4899,7 @@
                 ]
             },
             "properties": {
-                "name": "Escuala de ingenierias (EIC) I y II, 3° y 4° Piso respectivamente"
+                "name": "Escuela de ingenierias (EIC) I y II, 3° y 4° Piso respectivamente"
             },
             "bbox": [
                 -103.45558,
@@ -4975,7 +4975,7 @@
                 ]
             },
             "properties": {
-                "name": "Soporte Tecnico / IT support (2° or 3° Floor)"
+                "name": "Soporte Tecnico / IT support (3° Floor)"
             },
             "bbox": [
                 -103.455108,
@@ -4994,7 +4994,7 @@
                 ]
             },
             "properties": {
-                "name": "Copiroyal / Papeleria (3° o 4° Piso)"
+                "name": "Copiroyal / Papeleria (3° Piso)"
             },
             "bbox": [
                 -103.455287,
@@ -5958,6 +5958,45 @@
                 20.733372,
                 -103.45329,
                 20.733576
+            ]
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "@id": "",
+                "name": "Centro de Idiomas (1° Piso)"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    -103.455121,
+                    20.734399
+                ]
+            },
+            "bbox": [
+                -103.455121,
+                20.734399,
+                -103.455121,
+                20.734399
+            ]
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Centro de Vinculación y Desarrollo Profesional"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    -103.455612,
+                    20.733982
+                ]
+            },
+            "bbox": [
+                -103.455612,
+                20.733982,
+                -103.455612,
+                20.733982
             ]
         }
     ]
