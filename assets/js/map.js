@@ -752,7 +752,9 @@ function getUserLocation(force) {
       if (campusBounds && mainEntrance && !campusBounds.pad(0.15).contains([lat, lng])) {
         [lat, lng] = mainEntrance;
       }
-      userLocation = { lat, lng }; drawUser(); resolve(userLocation);
+      userLocation = { lat, lng }; drawUser();
+      renderList();   // muestra distancia/tiempo en la lista al obtener ubicación (por cualquier vía)
+      resolve(userLocation);
     };
     // 1º alta precisión (GPS en móvil). Si falla/expira, 2º baja precisión
     // (red/IP) que es mucho más fiable en escritorio. Solo null si ambas fallan.
@@ -774,12 +776,11 @@ $('locate-btn').addEventListener('click', async () => {
   btn.classList.remove('locating');
   if (!loc) { alert('No se pudo obtener tu ubicación. Revisa los permisos.'); return; }
   map.setView([loc.lat, loc.lng], Math.max(map.getZoom(), 18), { animate: !REDUCED_MOTION() });
-  renderList();
-  requestHeading();
+  requestHeading();   // renderList ya lo hizo getUserLocation
 });
 function drawUser() {
   if (!userLocation) return;
-  const html = `<div class="user-dot-wrap"><div class="user-heading"${userHeading==null?' style="display:none"':` style="transform:rotate(${userHeading}deg)"`}></div><div class="user-dot"></div></div>`;
+  const html = `<div class="user-dot-wrap"><div class="user-heading"${userHeading==null?' style="display:none"':` style="transform:rotate(${userHeading}deg)"`}></div><div class="user-ram">🐏</div></div>`;
   const icon = L.divIcon({ className: '', html, iconSize: [16,16], iconAnchor: [8,8] });
   if (userMarker) userMarker.setIcon(icon), userMarker.setLatLng([userLocation.lat, userLocation.lng]);
   else userMarker = L.marker([userLocation.lat, userLocation.lng], { icon, zIndexOffset: 1000, interactive: false }).addTo(map);
