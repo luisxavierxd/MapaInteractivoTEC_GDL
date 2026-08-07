@@ -61,7 +61,8 @@ function getCategory(p) {
   if (/cafeter[ií]a|güich|guich|chilaquiles|gongcha|c[oó]rdoba|kiosko|cocina|comedor|area.de.comer|juvijues|yum/.test(n)) return 'food';
   if (/tec.?store|bazar|copiroyal|papeler[ií]a|oxxo/.test(n)) return 'commercial';
   if (/caseta|entrada|salida|acceso|admisi[oó]n|direcci[oó]n|rector|administrativ|bienestar|social|lactancia|locatec|tecmed|congresos|difusi[oó]n|biciclet|elevador|herramienta|impresora|mentor|soporte|it.?support|servicios?|services|mantenimiento|movilidad|planta.*(agua|tratamiento)/.test(n)) return 'services';
-  if (/auditorio|biblioteca|cosas perdidas|sal[oó]n|salas?|piano|emprendimiento/.test(n)) return 'services';
+  if (/auditorio|biblioteca|cosas perdidas|sal[oó]n|salas?|piano/.test(n)) return 'services';
+  // El Centro de Emprendimiento es building=university → cae en 'academic' abajo.
   if (/prepa/.test(n) || b === 'school') return 'school';
   if (b === 'university') return 'academic';
   if (/ingenier[ií]|eiad/.test(n)) return 'academic';
@@ -409,7 +410,7 @@ function highlight(id, source) {
   if (r.layer !== selectedLayer) r.layer.setStyle(hoverStyle(r.layer));
   if (r.item) {
     r.item.classList.add('is-hot');
-    if (source === 'map') r.item.scrollIntoView({ block: 'nearest', behavior: REDUCED_MOTION() ? 'auto' : 'smooth' });
+    if (source === 'map') r.item.scrollIntoView({ block: 'center', behavior: REDUCED_MOTION() ? 'auto' : 'smooth' });
   }
 }
 function unhighlight(id) {
@@ -425,7 +426,7 @@ function onBuildingClick(feature, layer, fromList) {
   focusBuilding(layer, feature);
   if (!fromList) {
     const r = registry.get(feature.properties._fid);
-    if (r && r.item) r.item.scrollIntoView({ block: 'nearest', behavior: REDUCED_MOTION() ? 'auto' : 'smooth' });
+    if (r && r.item) r.item.scrollIntoView({ block: 'center', behavior: REDUCED_MOTION() ? 'auto' : 'smooth' });
   }
   setDeepLink({ b: shortId(feature) });
 }
