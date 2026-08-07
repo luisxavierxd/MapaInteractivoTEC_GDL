@@ -570,24 +570,31 @@ function epName(ep) { return ep ? (ep._isLocation ? ep.name : ep.feature.propert
 function openRouteView() { $('route-view').hidden = false; if (mq('(max-width:768px)').matches) snapSheet(1); }
 function closeRouteView() { $('route-view').hidden = true; }
 
+let routeReqId = 0;   // invalida resoluciones de GPS tardías que llegarían a destiempo
 $('route-back').addEventListener('click', closeRouteView);
 $('btn-directions').addEventListener('click', async () => {
   if (!activeFeature) return;
-  routeTo = { feature: activeFeature }; deselect();
+  const myReq = ++routeReqId;
+  routeTo = { feature: activeFeature }; routeFrom = null; deselect();
   openRouteView(); updateRouteUI();
-  // Pide la ubicación en el momento (no solo si ya estaba cacheada): así la
-  // PRIMERA ruta también puede usar tu posición como origen.
+  if (userLocation) {                          // ubicación ya conocida → úsala directo
+    routeFrom = { _isLocation: true, ...userLocation, name: 'Mi ubicación' };
+    updateRouteUI(); tryRoute(); return;
+  }
+  // Desconocida: pide el origen en el mapa/lista DE INMEDIATO (no bloquea) y,
+  // en paralelo, intenta el GPS; si llega antes de que elijas, lo usa.
+  startSelect('from');
   const loc = await getUserLocation();
-  if (!routeTo) return;                 // el usuario limpió el destino mientras resolvía
-  if (loc) { routeFrom = { _isLocation: true, ...loc, name: 'Mi ubicación' }; updateRouteUI(); tryRoute(); }
-  else startSelect('from');
+  if (myReq !== routeReqId || routeFrom) return;   // hubo otra acción o ya elegiste origen
+  if (loc) { stopSelect(); routeFrom = { _isLocation: true, ...loc, name: 'Mi ubicación' }; updateRouteUI(); tryRoute(); }
 });
 $('btn-set-from').addEventListener('click', () => {
+  ++routeReqId;
   if (!activeFeature) return;
   routeFrom = { feature: activeFeature }; routeTo = null; deselect();
   openRouteView(); startSelect('to'); updateRouteUI();
 });
-$('route-select-toggle').addEventListener('click', () => startSelect('auto'));
+$('route-select-toggle').addEventListener('click', () => { ++routeReqId; startSelect('auto'); });
 $('route-select-cancel').addEventListener('click', () => stopSelect());
 $('clear-from').addEventListener('click', () => { routeFrom = null; clearRoute(); updateRouteUI(); });
 $('clear-to').addEventListener('click', () => { routeTo = null; clearRoute(); updateRouteUI(); });
@@ -728,7 +735,7 @@ function getUserLocation(force) {
     navigator.geolocation.getCurrentPosition(
       pos => { userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; drawUser(); resolve(userLocation); },
       () => resolve(null),
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }   // nunca cuelga
     );
   });
 }
