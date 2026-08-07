@@ -390,6 +390,29 @@ html, body {
   margin-top: 1px;
 }
 
+/* ── Encabezado de categoría en la lista ──────────────────── */
+.cat-header {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em;
+  padding: 11px 14px 4px;
+}
+
+/* ── Etiquetas de edificio sobre el mapa (según el zoom) ───── */
+.leaflet-tooltip.building-label {
+  background: none; border: none; box-shadow: none; padding: 0;
+  color: #fff;
+  font: 600 11px/1.1 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  text-shadow: 0 0 3px #000, 0 0 3px #000, 0 1px 4px #000;
+  white-space: nowrap; pointer-events: none;
+}
+.leaflet-tooltip.building-label::before { display: none; }   /* sin flecha */
+.building-label.minor { display: none; }
+#map.labels-all .building-label.minor { display: block; }
+#map.labels-off .building-label { display: none; }
+
 .list-empty {
   padding: 32px 16px;
   text-align: center;

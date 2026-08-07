@@ -221,8 +221,33 @@ const geoLayer = L.geoJSON(null, {
     layer.on('mouseout', () => {
       if (layer !== selectedLayer) layer.setStyle(defaultStyle(layer));
     });
+    // Etiqueta permanente sobre el edificio (aparece/desaparece según el zoom)
+    if (feature.geometry.type === 'Polygon' && feature.properties.name) {
+      const cat = getCategory(feature.properties);
+      layer.bindTooltip(feature.properties.name, {
+        permanent: true, direction: 'center', opacity: 1,
+        className: `building-label ${isMajor(cat, feature.properties.name) ? 'major' : 'minor'}`,
+      });
+    }
   },
 });
+
+/* ── Etiquetas de edificio: umbral de zoom ────────────────── */
+// Bajo LABEL_MIN_ZOOM no se muestra ninguna; entre min y ALL solo las
+// "mayores"; desde ALL, todas. Evita el encabalgamiento en la vista general.
+const LABEL_MIN_ZOOM = 17, LABEL_ALL_ZOOM = 18;
+function isMajor(cat, name) {
+  const n = name || '';
+  if (/\d+\s*-\s*\d+/.test(n)) return false;   // sub-edificios (Aulas 3-2) → menores
+  return cat === 'academic' || cat === 'school' || cat === 'auditorium' ||
+    /auditorio|biblioteca|congresos|card|rector|residencias|eiad|ems|pabell/i.test(n);
+}
+function syncLabels() {
+  const z = map.getZoom(), m = document.getElementById('map');
+  m.classList.toggle('labels-off', z < LABEL_MIN_ZOOM);
+  m.classList.toggle('labels-all', z >= LABEL_ALL_ZOOM);
+}
+map.on('zoomend', syncLabels);
 
 /* ── Load paths ───────────────────────────────────────── */
 fetch('data/paths.geojson')
@@ -265,6 +290,7 @@ fetch('data/campus.geojson')
     });
     buildFilterChips();
     renderList(allFeatures);
+    syncLabels();
   })
   .catch(err => console.error('Error cargando GeoJSON:', err));
 
@@ -339,7 +365,18 @@ function renderList(features) {
     return;
   }
 
-  for (const f of named) appendItem(ul, f);
+  // Agrupado por categoría con encabezados; alfabético dentro de cada grupo.
+  for (const key of Object.keys(CATS)) {
+    const group = named
+      .filter(f => getCategory(f.properties) === key)
+      .sort((a, b) => a.properties.name.localeCompare(b.properties.name, 'es'));
+    if (!group.length) continue;
+    const h = document.createElement('li');
+    h.className = 'cat-header';
+    h.textContent = CATS[key].label;
+    ul.appendChild(h);
+    for (const f of group) appendItem(ul, f);
+  }
 
   if (unnamed.length > 0) {
     const sep = document.createElement('li');
@@ -438,7 +475,8 @@ function selectBuilding(feature, layer) {
 
 function scrollListToItem(id) {
   const el = document.querySelector(`.building-item[data-id="${id}"]`);
-  if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // Centra el item en la lista al seleccionar (los extremos se ajustan solos).
+  if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 /* ── Info panel ───────────────────────────────────────── */
