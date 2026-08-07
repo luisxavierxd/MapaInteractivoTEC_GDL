@@ -567,13 +567,16 @@ function openRouteView() { $('route-view').hidden = false; if (mq('(max-width:76
 function closeRouteView() { $('route-view').hidden = true; }
 
 $('route-back').addEventListener('click', closeRouteView);
-$('btn-directions').addEventListener('click', () => {
+$('btn-directions').addEventListener('click', async () => {
   if (!activeFeature) return;
   routeTo = { feature: activeFeature }; deselect();
-  openRouteView();
-  if (userLocation) { routeFrom = { _isLocation: true, ...userLocation, name: 'Mi ubicación' }; tryRoute(); }
+  openRouteView(); updateRouteUI();
+  // Pide la ubicación en el momento (no solo si ya estaba cacheada): así la
+  // PRIMERA ruta también puede usar tu posición como origen.
+  const loc = await getUserLocation();
+  if (!routeTo) return;                 // el usuario limpió el destino mientras resolvía
+  if (loc) { routeFrom = { _isLocation: true, ...loc, name: 'Mi ubicación' }; updateRouteUI(); tryRoute(); }
   else startSelect('from');
-  updateRouteUI();
 });
 $('btn-set-from').addEventListener('click', () => {
   if (!activeFeature) return;
@@ -709,21 +712,28 @@ function startNavWatch() {
 function stopNavWatch() { if (navWatchId != null) { navigator.geolocation.clearWatch(navWatchId); navWatchId = null; } }
 
 /* ── Geolocalización + rumbo (Fases 5.2 / 9.2) ─────────────── */
-$('locate-btn').addEventListener('click', () => {
+// Devuelve la ubicación (cacheada, o la pide). force=true fuerza refetch.
+function getUserLocation(force) {
+  if (userLocation && !force) return Promise.resolve(userLocation);
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => { userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; drawUser(); resolve(userLocation); },
+      () => resolve(null),
+      { enableHighAccuracy: true }
+    );
+  });
+}
+$('locate-btn').addEventListener('click', async () => {
   if (!navigator.geolocation) { alert('Tu navegador no soporta geolocalización.'); return; }
   const btn = $('locate-btn');
-  btn.classList.add('locating');   // el spinner se retira en los callbacks (async)
-  navigator.geolocation.getCurrentPosition(pos => {
-    btn.classList.remove('locating');
-    userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    drawUser();
-    map.setView([userLocation.lat, userLocation.lng], Math.max(map.getZoom(), 18), { animate: !REDUCED_MOTION() });
-    renderList();
-    requestHeading();
-  }, () => {
-    btn.classList.remove('locating');
-    alert('No se pudo obtener tu ubicación. Revisa los permisos.');
-  }, { enableHighAccuracy: true });
+  btn.classList.add('locating');
+  const loc = await getUserLocation(true);   // siempre refresca al pulsar localizar
+  btn.classList.remove('locating');
+  if (!loc) { alert('No se pudo obtener tu ubicación. Revisa los permisos.'); return; }
+  map.setView([loc.lat, loc.lng], Math.max(map.getZoom(), 18), { animate: !REDUCED_MOTION() });
+  renderList();
+  requestHeading();
 });
 function drawUser() {
   if (!userLocation) return;
