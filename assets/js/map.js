@@ -174,7 +174,17 @@ $('layer-toggle').addEventListener('click', () => {
   applyBasemap();
 });
 $('recenter-btn').addEventListener('click', () => {
-  if (campusBounds) map.fitBounds(campusBounds, { padding: [24, 24], animate: !REDUCED_MOTION() });
+  const anim = !REDUCED_MOTION();
+  if (navPath && navPath.length) {              // hay ruta activa → encuadra la ruta
+    const isMobile = mq('(max-width:768px)').matches;
+    map.fitBounds(L.polyline(navPath).getBounds(), {
+      paddingTopLeft: isMobile ? [30, 30] : [$('sidebar').offsetWidth + 30, 30],
+      paddingBottomRight: [30, isMobile ? Math.round(window.innerHeight * 0.35) : 30],
+      animate: anim,
+    });
+  } else if (campusBounds) {                     // si no, todo el campus
+    map.fitBounds(campusBounds, { padding: [24, 24], animate: anim });
+  }
 });
 
 /* ── Estilos (opacidad diferencial, Fase 2.1) ──────────────── */
@@ -211,6 +221,7 @@ let activeFilter = 'all';
 let selectedLayer = null, activeFeature = null;
 let userLocation = null, userMarker = null, userHeading = null;
 let campusBounds = null;      // encuadre del campus para el botón de centrar
+let mainEntrance = null;      // [lat,lng] de "Entrada principal" (snap si estás fuera)
 const registry = new Map();   // _fid -> { feature, layer, item }
 
 /* ── Capa GeoJSON ──────────────────────────────────────────── */
@@ -261,6 +272,10 @@ fetch('data/campus.geojson')
       p._cat = getCategory(p);
       p._center = centroid(f.geometry);
     });
+    // "Entrada principal": destino del snap cuando el usuario está fuera del campus.
+    const meFeat = data.features.find(f => normalize(f.properties.name || '') === 'entrada principal');
+    if (meFeat) mainEntrance = meFeat.properties._center;
+
     // Los puntos de entrada del router ("Entrada …") son ayudas de navegación,
     // no destinos: no se renderizan ni entran a la lista/búsqueda.
     const isEntryPoint = (f) => f.geometry.type === 'Point' && normalize(f.properties.name || '').startsWith('entrada');
@@ -353,27 +368,26 @@ function renderList() {
 
   if (!set.length) { ul.innerHTML = '<li class="list-empty">Sin resultados en esta categoría.</li>'; return; }
 
-  const byDistance = !!userLocation;
-  if (byDistance) {
-    set = set.map(b => ({ ...b, dist: haversine(userLocation.lat, userLocation.lng, b.feature.properties._center[0], b.feature.properties._center[1]) }))
-             .sort((a, b) => a.dist - b.dist);
-    for (const b of set) ul.appendChild(itemEl(b, b.dist));
-  } else {
-    // Alfabético con headers de categoría pegajosos
-    set.sort((a, b) => a.name.localeCompare(b.name, 'es'));
-    if (activeFilter === 'all') {
-      for (const key of ORDER) {
-        const group = set.filter(b => b.cat === key);
-        if (!group.length) continue;
-        const h = document.createElement('li');
-        h.className = 'cat-header';
-        h.textContent = CATEGORY_STYLE[key].label;
-        ul.appendChild(h);
-        for (const b of group) ul.appendChild(itemEl(b, null));
-      }
-    } else {
-      for (const b of set) ul.appendChild(itemEl(b, null));
+  // Siempre agrupado por tipo con separadores. Dentro de cada grupo se ordena
+  // por distancia si hay GPS; si no, alfabéticamente.
+  const hasLoc = !!userLocation;
+  if (hasLoc) set = set.map(b => ({ ...b, dist: haversine(userLocation.lat, userLocation.lng, b.feature.properties._center[0], b.feature.properties._center[1]) }));
+  const sortFn = hasLoc ? (a, b) => a.dist - b.dist : (a, b) => a.name.localeCompare(b.name, 'es');
+
+  const addGroup = (list) => { for (const b of list.sort(sortFn)) ul.appendChild(itemEl(b, hasLoc ? b.dist : null)); };
+
+  if (activeFilter === 'all') {
+    for (const key of ORDER) {
+      const group = set.filter(b => b.cat === key);
+      if (!group.length) continue;
+      const h = document.createElement('li');
+      h.className = 'cat-header';
+      h.textContent = CATEGORY_STYLE[key].label;
+      ul.appendChild(h);
+      addGroup(group);
     }
+  } else {
+    addGroup(set);   // ya es un solo tipo (chip activo)
   }
 }
 function itemEl(b, dist) {
@@ -732,10 +746,23 @@ function getUserLocation(force) {
   if (userLocation && !force) return Promise.resolve(userLocation);
   return new Promise((resolve) => {
     if (!navigator.geolocation) { resolve(null); return; }
+    const ok = pos => {
+      let lat = pos.coords.latitude, lng = pos.coords.longitude;
+      // Fuera del campus → ancla en la entrada principal (como hace la ruta).
+      if (campusBounds && mainEntrance && !campusBounds.pad(0.15).contains([lat, lng])) {
+        [lat, lng] = mainEntrance;
+      }
+      userLocation = { lat, lng }; drawUser(); resolve(userLocation);
+    };
+    // 1º alta precisión (GPS en móvil). Si falla/expira, 2º baja precisión
+    // (red/IP) que es mucho más fiable en escritorio. Solo null si ambas fallan.
     navigator.geolocation.getCurrentPosition(
-      pos => { userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; drawUser(); resolve(userLocation); },
-      () => resolve(null),
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }   // nunca cuelga
+      ok,
+      () => navigator.geolocation.getCurrentPosition(
+        ok, () => resolve(null),
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+      ),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
     );
   });
 }
