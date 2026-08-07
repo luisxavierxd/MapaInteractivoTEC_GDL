@@ -35,6 +35,10 @@ const CATEGORY_STYLE = {
 };
 const ORDER = ['academic','school','sports','dorm','food','services','commercial','other'];
 
+// Aplica el tema ANTES de leer los colores, para que las variantes de modo
+// oscuro (p. ej. --cat-commercial-line) se resuelvan con el valor correcto.
+try { if (localStorage.getItem('bm.theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch {}
+
 // Resolver colores de CSS una vez (canvas no entiende var()).
 const _cs = getComputedStyle(document.documentElement);
 function cssVar(name) { return _cs.getPropertyValue(name).trim(); }
@@ -83,7 +87,8 @@ function haversine(lat1, lng1, lat2, lng2) {
 }
 function centroid(geometry) {
   if (geometry.type === 'Point') return [geometry.coordinates[1], geometry.coordinates[0]];
-  const ring = geometry.coordinates[0];
+  // Polygon -> primer anillo; MultiPolygon -> primer anillo del primer polígono.
+  const ring = geometry.type === 'MultiPolygon' ? geometry.coordinates[0][0] : geometry.coordinates[0];
   let lat = 0, lng = 0;
   for (const [x, y] of ring) { lng += x; lat += y; }
   return [lat / ring.length, lng / ring.length];
@@ -169,11 +174,31 @@ $('layer-toggle').addEventListener('click', () => {
   applyBasemap();
 });
 
-/* ── Estilos de polígono (opacidad diferencial, Fase 2.1) ──── */
+/* ── Estilos (opacidad diferencial, Fase 2.1) ──────────────── */
+// Polígonos y puntos necesitan estilos base distintos: un punto con
+// fillOpacity .18 y sin radio queda invisible. Cada revert elige según el tipo.
 const STYLE_BASE = (cat) => ({ color: categoryLine(cat), weight: 2, opacity: .9, fillColor: categoryColor(cat), fillOpacity: .18 });
 const STYLE_HOVER    = { weight: 3,   fillOpacity: .42 };
 const STYLE_SELECTED = { weight: 3.5, fillOpacity: .55 };
 const STYLE_DIMMED   = { weight: 1,   opacity: .35, fillOpacity: .05 };
+const PT_BASE = (cat) => ({ radius: 6, color: categoryLine(cat), weight: 2, opacity: .9, fillColor: categoryColor(cat), fillOpacity: .7 });
+const PT_HOVER    = { radius: 7, weight: 3, fillOpacity: .9 };
+const PT_SELECTED = { radius: 7, weight: 3, fillOpacity: .95 };
+const PT_DIMMED   = { radius: 5, weight: 1, opacity: .35, fillOpacity: .15 };
+
+const isPoint = (layer) => layer instanceof L.CircleMarker;
+const baseStyle = (layer) => isPoint(layer) ? PT_BASE(layer.feature.properties._cat) : STYLE_BASE(layer.feature.properties._cat);
+const hoverStyle = (layer) => isPoint(layer) ? PT_HOVER : STYLE_HOVER;
+const selStyle = (layer) => isPoint(layer) ? PT_SELECTED : STYLE_SELECTED;
+const dimStyle = (layer) => isPoint(layer) ? PT_DIMMED : STYLE_DIMMED;
+// Revierte al estilo que corresponde por estado (filtro / selección).
+function revertStyle(layer) {
+  if (layer === selectedLayer) { layer.setStyle(selStyle(layer)); return; }
+  const on = activeFilter === 'all' || layer.feature.properties._cat === activeFilter;
+  layer.setStyle(on ? baseStyle(layer) : dimStyle(layer));
+}
+// Mantiene los puntos por encima de los polígonos (selectables aunque estén dentro).
+function pointsToFront() { geoLayer.eachLayer(l => { if (isPoint(l)) l.bringToFront(); }); }
 
 /* ── Estado ────────────────────────────────────────────────── */
 let allFeatures = [], buildings = [];   // buildings: registros enriquecidos para búsqueda/orden
@@ -187,10 +212,7 @@ const registry = new Map();   // _fid -> { feature, layer, item }
 /* ── Capa GeoJSON ──────────────────────────────────────────── */
 const geoLayer = L.geoJSON(null, {
   style: (f) => STYLE_BASE(getCategory(f.properties)),
-  pointToLayer: (f, latlng) => {
-    const cat = getCategory(f.properties);
-    return L.circleMarker(latlng, { radius: 6, color: categoryLine(cat), weight: 2, opacity: .9, fillColor: categoryColor(cat), fillOpacity: .7 });
-  },
+  pointToLayer: (f, latlng) => L.circleMarker(latlng, PT_BASE(getCategory(f.properties))),
   onEachFeature(f, layer) {
     const p = f.properties;
     layer.on('click', () => onBuildingClick(f, layer, false));
@@ -235,7 +257,10 @@ fetch('data/campus.geojson')
       p._cat = getCategory(p);
       p._center = centroid(f.geometry);
     });
-    allFeatures = data.features;
+    // Los puntos de entrada del router ("Entrada …") son ayudas de navegación,
+    // no destinos: no se renderizan ni entran a la lista/búsqueda.
+    const isEntryPoint = (f) => f.geometry.type === 'Point' && normalize(f.properties.name || '').startsWith('entrada');
+    allFeatures = data.features.filter(f => !isEntryPoint(f));
     buildings = allFeatures.filter(f => f.properties.name).map(f => {
       const p = f.properties;
       const aliases = Array.isArray(p.aliases) ? p.aliases : [];
@@ -247,7 +272,11 @@ fetch('data/campus.geojson')
       };
     });
 
-    geoLayer.addData(data).addTo(map);
+    geoLayer.addData({ type: 'FeatureCollection', features: allFeatures }).addTo(map);
+    // Los puntos van por ENCIMA de la geometría: en canvas, bringToFront los
+    // pone al final del orden de dibujo, así son visibles y seleccionables
+    // aunque caigan dentro de un polígono (el hit-test elige el último).
+    pointsToFront();
     const bounds = geoLayer.getBounds().pad(0.25);
     map.setMaxBounds(bounds);
     map.fitBounds(geoLayer.getBounds(), { padding: [24, 24] });
@@ -302,11 +331,7 @@ function applyFilter(key) {
   updateMapDim();
 }
 function updateMapDim() {
-  registry.forEach(({ feature, layer }) => {
-    const on = activeFilter === 'all' || feature.properties._cat === activeFilter;
-    layer.setStyle(on ? STYLE_BASE(feature.properties._cat) : STYLE_DIMMED);
-    if (layer === selectedLayer) layer.setStyle(STYLE_SELECTED);
-  });
+  registry.forEach(({ layer }) => revertStyle(layer));
 }
 
 /* ── Lista de edificios (Fase 3.2) ─────────────────────────── */
@@ -351,6 +376,7 @@ function itemEl(b, dist) {
   const btn = document.createElement('button');
   btn.className = 'bldg-item';
   btn.dataset.id = b.fid;
+  if (activeFeature && activeFeature.properties._fid === b.fid) btn.classList.add('active');
   // -line (oscurecido) para que el glifo cumpla contraste incluso en amarillo
   btn.style.setProperty('--item-color', categoryLine(b.cat));
   const meta = dist != null
@@ -380,7 +406,7 @@ geoLayer.on('add', buildRegistry);
 /* ── Cross-highlight lista ↔ mapa (Fase 3.3) ───────────────── */
 function highlight(id, source) {
   const r = registry.get(id); if (!r) return;
-  if (r.layer !== selectedLayer) r.layer.setStyle(STYLE_HOVER).bringToFront();
+  if (r.layer !== selectedLayer) r.layer.setStyle(hoverStyle(r.layer));
   if (r.item) {
     r.item.classList.add('is-hot');
     if (source === 'map') r.item.scrollIntoView({ block: 'nearest', behavior: REDUCED_MOTION() ? 'auto' : 'smooth' });
@@ -388,10 +414,7 @@ function highlight(id, source) {
 }
 function unhighlight(id) {
   const r = registry.get(id); if (!r) return;
-  if (r.layer !== selectedLayer) {
-    const on = activeFilter === 'all' || r.feature.properties._cat === activeFilter;
-    r.layer.setStyle(on ? STYLE_BASE(r.feature.properties._cat) : STYLE_DIMMED);
-  }
+  if (r.layer !== selectedLayer) revertStyle(r.layer);
   if (r.item) r.item.classList.remove('is-hot');
 }
 
@@ -407,13 +430,11 @@ function onBuildingClick(feature, layer, fromList) {
   setDeepLink({ b: shortId(feature) });
 }
 function selectBuilding(feature, layer) {
-  if (selectedLayer && selectedLayer !== layer) {
-    const pcat = selectedLayer.feature.properties._cat;
-    const on = activeFilter === 'all' || pcat === activeFilter;
-    selectedLayer.setStyle(on ? STYLE_BASE(pcat) : STYLE_DIMMED);
-  }
+  const prev = selectedLayer;
   selectedLayer = layer; activeFeature = feature;
-  layer.setStyle(STYLE_SELECTED); layer.bringToFront();
+  if (prev && prev !== layer) revertStyle(prev);
+  layer.setStyle(selStyle(layer));
+  if (!isPoint(layer)) { layer.bringToFront(); pointsToFront(); }  // puntos siempre arriba
   document.querySelectorAll('.bldg-item').forEach(el => el.classList.toggle('active', el.dataset.id === feature.properties._fid));
   showInfo(feature);
   if (mq('(max-width: 768px)').matches) snapSheet(0);   // peek: deja ver la ficha y el mapa
@@ -434,7 +455,7 @@ function showInfo(feature) {
   const p = feature.properties, cat = p._cat;
   $('info-name').textContent = p.name || 'Sin nombre';
   const badge = $('info-category');
-  badge.innerHTML = `${catIcon(cat, 14)} ${CATEGORY_STYLE[cat].label}`;
+  badge.innerHTML = `<span class="badge-ic">${catIcon(cat, 14)}</span> ${CATEGORY_STYLE[cat].label}`;
   badge.style.setProperty('--cat-color', categoryLine(cat));
   const fields = $('info-fields'); fields.innerHTML = '';
   for (const key of INFO_KEYS) {
@@ -463,10 +484,9 @@ function deselect() {
   $('info-panel').classList.add('hidden');
   document.body.classList.remove('info-open');
   if (selectedLayer) {
-    const pcat = selectedLayer.feature.properties._cat;
-    const on = activeFilter === 'all' || pcat === activeFilter;
-    selectedLayer.setStyle(on ? STYLE_BASE(pcat) : STYLE_DIMMED);
+    const prev = selectedLayer;
     selectedLayer = null; activeFeature = null;
+    revertStyle(prev);
   }
   document.querySelectorAll('.bldg-item').forEach(el => el.classList.remove('active'));
   setDeepLink({});
@@ -490,6 +510,7 @@ function runSearch() {
   const res = fuse ? fuse.search(normalize(q), { limit: 8 }) : [];
   searchResults.innerHTML = '';
   srItems = []; srActive = -1;
+  searchInput.removeAttribute('aria-activedescendant');   // opción activa anterior ya no existe
   if (!res.length) {
     searchResults.innerHTML = `<li class="sr-empty">No encontramos <b>«${q}»</b>. Prueba con el nombre corto, como <b>A6</b> o <b>CETEC</b>.</li>`;
     openResults(); searchInput.removeAttribute('aria-activedescendant'); return;
@@ -566,10 +587,19 @@ $('route-swap').addEventListener('click', () => { [routeFrom, routeTo] = [routeT
 
 function startSelect(side) {
   routeSelecting = side;
+  // Oculta la capa de ruta para dejar visible la lista y la búsqueda: así el
+  // punto puede elegirse desde el teclado (lista/búsqueda), no solo tocando el mapa.
+  $('route-view').hidden = true;
   const badge = $('route-select-badge'); badge.hidden = false;
-  $('route-select-text').textContent = side === 'to' ? 'Toca un edificio para el destino' : 'Toca un edificio para el origen';
+  $('route-select-text').textContent = side === 'to'
+    ? 'Elige el destino en la lista o el mapa' : 'Elige el origen en la lista o el mapa';
+  if (mq('(max-width:768px)').matches) snapSheet(1);
 }
-function stopSelect() { routeSelecting = null; $('route-select-badge').hidden = true; }
+function stopSelect() {
+  routeSelecting = null;
+  $('route-select-badge').hidden = true;
+  if (routeFrom || routeTo) openRouteView();
+}
 function assignRouteEndpoint(feature) {
   const ep = { feature };
   if (routeSelecting === 'to') { routeTo = ep; stopSelect(); }
@@ -629,6 +659,7 @@ function drawRoute(latlngs) {
   map.fitBounds(L.polyline(latlngs).getBounds(), {
     paddingTopLeft: isMobile ? [30, 30] : [$('sidebar').offsetWidth + 30, 30],
     paddingBottomRight: [30, isMobile ? Math.round(window.innerHeight * 0.35) : 30],
+    animate: !REDUCED_MOTION(),
   });
 }
 function showNav(distM, toName) {
@@ -639,9 +670,13 @@ function showNav(distM, toName) {
   $('nav-dist').textContent = fmtDist(distM);
   $('nav-to').textContent = `Llegando a ${toName || '…'}`;
   $('nav-bar').hidden = false;
+  // Deep link compartible cuando ambos extremos son edificios (Fase 9.1)
+  if (routeFrom?.feature && routeTo?.feature) setDeepLink({ from: shortId(routeFrom.feature), to: shortId(routeTo.feature) });
   startNavWatch();
 }
 function showRouteError() {
+  clearRouteLayer();
+  $('nav-bar').hidden = true;
   $('route-summary').hidden = false;
   $('route-summary').innerHTML = `<div class="rs-stat-label" style="text-transform:none">No pudimos calcular la ruta. Verifica que ambos puntos estén dentro del campus.</div>`;
 }
@@ -675,16 +710,19 @@ function stopNavWatch() { if (navWatchId != null) { navigator.geolocation.clearW
 /* ── Geolocalización + rumbo (Fases 5.2 / 9.2) ─────────────── */
 $('locate-btn').addEventListener('click', () => {
   if (!navigator.geolocation) { alert('Tu navegador no soporta geolocalización.'); return; }
-  $('locate-btn').classList.add('locating');
+  const btn = $('locate-btn');
+  btn.classList.add('locating');   // el spinner se retira en los callbacks (async)
   navigator.geolocation.getCurrentPosition(pos => {
+    btn.classList.remove('locating');
     userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
     drawUser();
     map.setView([userLocation.lat, userLocation.lng], Math.max(map.getZoom(), 18), { animate: !REDUCED_MOTION() });
     renderList();
     requestHeading();
-  }, () => { alert('No se pudo obtener tu ubicación. Revisa los permisos.'); }, { enableHighAccuracy: true })
-  ;
-  $('locate-btn').classList.remove('locating');
+  }, () => {
+    btn.classList.remove('locating');
+    alert('No se pudo obtener tu ubicación. Revisa los permisos.');
+  }, { enableHighAccuracy: true });
 });
 function drawUser() {
   if (!userLocation) return;
@@ -693,7 +731,10 @@ function drawUser() {
   if (userMarker) userMarker.setIcon(icon), userMarker.setLatLng([userLocation.lat, userLocation.lng]);
   else userMarker = L.marker([userLocation.lat, userLocation.lng], { icon, zIndexOffset: 1000, interactive: false }).addTo(map);
 }
+let headingRequested = false;
 function requestHeading() {
+  if (headingRequested) return;   // evita acumular listeners en cada clic de localizar
+  headingRequested = true;
   const handler = (e) => { if (e.alpha != null) { userHeading = 360 - e.alpha; drawUser(); } };
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
     DeviceOrientationEvent.requestPermission().then(s => { if (s === 'granted') window.addEventListener('deviceorientation', handler, true); }).catch(() => {});
@@ -707,7 +748,7 @@ function requestHeading() {
 /* ── Bottom sheet móvil (Fase 5.1) ─────────────────────────── */
 const SNAPS = [0.18, 0.55, 0.92];
 const sheet = $('sidebar');
-let sheetSnap = 0, dragging = false, dragStartY = 0, dragStartTy = 0, lastY = 0, lastT = 0, velocity = 0;
+let sheetSnap = 0, dragging = false, dragStartY = 0, dragStartTy = 0, lastY = 0, lastT = 0, velocity = 0, sheetMoved = false;
 
 function tyForSnap(i) { return sheet.offsetHeight - SNAPS[i] * window.innerHeight; }
 function snapSheet(i) {
@@ -719,7 +760,7 @@ function snapSheet(i) {
 }
 function onDragStart(e) {
   if (!mq('(max-width:768px)').matches) return;
-  dragging = true; sheet.classList.add('dragging');
+  dragging = true; sheetMoved = false; sheet.classList.add('dragging');
   dragStartY = e.clientY;
   dragStartTy = new DOMMatrixReadOnly(getComputedStyle(sheet).transform).m42 || tyForSnap(sheetSnap);
   lastY = e.clientY; lastT = performance.now(); velocity = 0;
@@ -728,6 +769,7 @@ function onDragStart(e) {
 function onDragMove(e) {
   if (!dragging) return;
   const dy = e.clientY - dragStartY;
+  if (Math.abs(dy) > 6) sheetMoved = true;
   let ty = Math.max(tyForSnap(SNAPS.length - 1), Math.min(tyForSnap(0) + 40, dragStartTy + dy));
   sheet.style.transform = `translateY(${ty}px)`;
   const now = performance.now(); const dt = now - lastT;
@@ -745,6 +787,11 @@ function onDragEnd() {
   snapSheet(best);
 }
 $('sheet-handle').addEventListener('pointerdown', onDragStart);
+// Tap / Enter / Espacio en el handle: cicla peek → half → full (accesible por teclado)
+$('sheet-handle').addEventListener('click', () => {
+  if (sheetMoved) { sheetMoved = false; return; }   // fue un arrastre, no un tap
+  snapSheet((sheetSnap + 1) % SNAPS.length);
+});
 $('panel-header').addEventListener('pointerdown', (e) => { if (e.target.closest('button')) return; onDragStart(e); });
 window.addEventListener('pointermove', onDragMove);
 window.addEventListener('pointerup', onDragEnd);
@@ -758,8 +805,8 @@ if (mq('(max-width:768px)').matches) requestAnimationFrame(() => snapSheet(0));
 const onboard = $('onboard');
 function openOnboard() {
   onboard.hidden = false;
-  const accept = $('onboard-accept'); accept.focus();
-  trapFocus(onboard);
+  trapFocus(onboard);                 // captura el disparador ANTES de mover el foco
+  $('onboard-accept').focus();
 }
 function closeOnboard() {
   onboard.hidden = true; releaseFocus();

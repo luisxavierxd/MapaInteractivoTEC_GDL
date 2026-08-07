@@ -168,7 +168,9 @@ button { font-family: inherit; cursor: pointer; color: inherit; }
   border-radius: var(--r-sm);
   cursor: pointer;
 }
-.sr-item[aria-selected="true"], .sr-item:hover { background: var(--c-surface); }
+.sr-item:hover { background: var(--c-surface); }
+/* opción activa por teclado: claramente visible (aria-activedescendant, sin :focus) */
+.sr-item[aria-selected="true"] { background: var(--c-surface-2); box-shadow: inset 3px 0 0 var(--c-focus); }
 .sr-item .sr-ic { width: 24px; height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .sr-item .sr-name { font-size: var(--fs-md); color: var(--c-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sr-item .sr-cat { font-size: var(--fs-xs); color: var(--c-text-mut); margin-left: auto; flex-shrink: 0; }
@@ -187,13 +189,13 @@ button { font-family: inherit; cursor: pointer; color: inherit; }
   flex-shrink: 0;
   height: 32px; padding: 0 var(--sp-3);
   background: var(--c-accent-weak);
-  color: var(--c-accent);
+  color: var(--c-text);                 /* texto oscuro: contraste ≥4.5:1 sobre accent-weak */
   border: 1px solid var(--c-accent);
   border-radius: var(--r-pill);
   font-size: var(--fs-sm); font-weight: 600;
   white-space: nowrap;
 }
-[data-theme="dark"] #filter-reset { color: #FFB088; }
+#filter-reset svg { color: var(--c-accent); }
 
 .chip-row {
   display: flex; gap: var(--sp-2);
@@ -226,8 +228,7 @@ button { font-family: inherit; cursor: pointer; color: inherit; }
   color: var(--c-text);
   font-weight: 600;
 }
-.chip[aria-pressed="true"] .chip-count { color: var(--c-accent); }
-[data-theme="dark"] .chip[aria-pressed="true"] .chip-count { color: #FFB088; }
+/* el conteo activo hereda --c-text-mut (contraste OK); la distinción es peso + fondo */
 
 /* ── Lista de edificios ──────────────────────────────────── */
 #building-list { list-style: none; overflow-y: auto; flex: 1; padding-bottom: var(--sp-3); }
@@ -420,9 +421,10 @@ button { font-family: inherit; cursor: pointer; color: inherit; }
   text-transform: uppercase; letter-spacing: .06em;
   padding: 3px 10px; border-radius: var(--r-pill);
   margin-bottom: var(--sp-2);
-  background: color-mix(in srgb, var(--cat-color, var(--c-accent)) 14%, transparent);
-  color: var(--cat-color, var(--c-text));
+  background: color-mix(in srgb, var(--cat-color, var(--c-accent)) 16%, transparent);
+  color: var(--c-text);                 /* etiqueta con texto oscuro (contraste) */
 }
+#info-category .badge-ic { display: inline-flex; color: var(--cat-color); }
 #info-name { font-size: var(--fs-xl); font-weight: 700; line-height: var(--lh-tight); letter-spacing: -.01em; padding-right: 36px; margin-bottom: var(--sp-3); }
 #info-fields { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: var(--sp-4); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--c-border); }
 #info-fields:empty { display: none; }
@@ -450,7 +452,7 @@ button { font-family: inherit; cursor: pointer; color: inherit; }
 .nav-info { flex: 1; min-width: 0; }
 .nav-primary { font-size: var(--fs-xl); font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .nav-secondary { font-size: var(--fs-sm); color: var(--c-text-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nav-secondary .recalc { color: var(--c-accent); font-weight: 600; }
+.nav-secondary .recalc { color: var(--c-text); font-weight: 600; }
 #nav-cancel { flex-shrink: 0; }
 
 /* ── Modal onboarding ────────────────────────────────────── */
@@ -517,8 +519,8 @@ button { font-family: inherit; cursor: pointer; color: inherit; }
 
   #sheet-handle {
     display: flex; align-items: center; justify-content: center;
-    padding: var(--sp-3) 0; flex-shrink: 0;
-    cursor: grab;
+    width: 100%; padding: var(--sp-3) 0; flex-shrink: 0;
+    background: none; border: none; cursor: grab;
   }
   #sheet-handle span { width: 36px; height: 4px; border-radius: var(--r-pill); background: var(--c-border); }
 
