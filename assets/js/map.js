@@ -206,16 +206,24 @@ const geoLayer = L.geoJSON(null, {
   },
 });
 
-/* ── Carga de caminos (router) ─────────────────────────────── */
-fetch('data/paths.geojson')
-  .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-  .then(data => {
+/* ── Router: carga diferida (Fase 8.1) ─────────────────────── */
+// router.js (grafo + Dijkstra) y paths.geojson solo se cargan la primera
+// vez que el usuario pide una ruta, vía import() dinámico.
+let routerReady = null;
+function ensureRouter() {
+  if (routerReady) return routerReady;
+  routerReady = (async () => {
+    const [{ CampusRouter }, data] = await Promise.all([
+      import('./router.js'),   // relativo a map.js (/assets/js/)
+      fetch('data/paths.geojson').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+    ]);
     entryPoints = data.features.filter(f => f.geometry.type === 'Point')
       .map(f => ({ name: normalize(f.properties.name || ''), lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] }));
     campusRouter = new CampusRouter();
     campusRouter.load(data);
-  })
-  .catch(err => console.error('[Router] paths.geojson falló:', err));
+  })().catch(err => { console.error('[Router] carga falló:', err); routerReady = null; });
+  return routerReady;
+}
 
 /* ── Carga de edificios ────────────────────────────────────── */
 fetch('data/campus.geojson')
@@ -591,6 +599,7 @@ function getEntries(ep) {
 async function fetchRoute(silent) {
   if (!routeFrom || !routeTo) return;
   const [fLat, fLng] = epLatLng(routeFrom), [tLat, tLng] = epLatLng(routeTo);
+  await ensureRouter();
   if (campusRouter) {
     const result = campusRouter.route(fLat, fLng, tLat, tLng, getEntries(routeFrom), getEntries(routeTo));
     if (result) { drawRoute(result.path); showNav(result.distance, epName(routeTo)); }
@@ -802,4 +811,47 @@ function handleDeepLink() {
     const b = findByShort(q.get('b'));
     if (b) { const r = registry.get(b.fid); if (r) onBuildingClick(r.feature, r.layer, true); }
   }
+}
+
+/* ── PWA: service worker + descarga offline (Fase 8.2) ─────── */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+if (load('bm.offline')) $('offline-btn').classList.add('done');
+$('offline-btn').addEventListener('click', precacheTiles);
+
+async function precacheTiles() {
+  const btn = $('offline-btn');
+  if (btn.classList.contains('busy')) return;
+  const b = geoLayer.getBounds();
+  if (!b.isValid || !b.isValid()) return;
+  btn.classList.add('busy'); btn.classList.remove('done');
+
+  const layer = tiles[activeTileKey()];
+  const tmpl = layer._url, subs = layer.options.subdomains || 'abc';
+  const lon2x = (lon, z) => Math.floor((lon + 180) / 360 * 2 ** z);
+  const lat2y = (lat, z) => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** z); };
+  const urls = [];
+  for (const z of [17, 18]) {
+    const x0 = lon2x(b.getWest(), z), x1 = lon2x(b.getEast(), z);
+    const y0 = lat2y(b.getNorth(), z), y1 = lat2y(b.getSouth(), z);
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+      const s = subs[Math.abs(x + y) % subs.length];
+      urls.push(tmpl.replace('{s}', s).replace('{z}', z).replace('{x}', x).replace('{y}', y).replace('{r}', ''));
+    }
+  }
+  // Descarga en lotes durante tiempo ocioso; el SW los cachea (SWR).
+  const idle = window.requestIdleCallback || (cb => setTimeout(() => cb(), 16));
+  let i = 0;
+  await new Promise(done => {
+    const step = () => {
+      Promise.allSettled(urls.slice(i, i + 12).map(u => fetch(u, { mode: 'no-cors' }))).then(() => {
+        i += 12; if (i < urls.length) idle(step); else done();
+      });
+    };
+    step();
+  });
+  btn.classList.remove('busy'); btn.classList.add('done');
+  btn.setAttribute('aria-label', 'Mapa descargado para uso sin conexión');
+  save('bm.offline', '1');
 }

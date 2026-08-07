@@ -1,4 +1,4 @@
-console.info('[router.js] cargado');
+// Módulo ES: se carga de forma diferida vía import() al primer cálculo de ruta.
 const SNAP_DECIMALS = 5;   // ~1 m — precision for node deduplication
 const SNAP_THRESHOLD = 3;  // m  — auto-connect endpoints closer than this
 
@@ -403,3 +403,5 @@ class CampusRouter {
     return { path, distance: bestTotal };
   }
 }
+
+export { CampusRouter };

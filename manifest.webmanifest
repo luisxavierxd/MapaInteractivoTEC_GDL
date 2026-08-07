@@ -1,0 +1,16 @@
+{
+  "name": "Mapa del Borrego Merodeador — Campus Tec GDL",
+  "short_name": "Borrego GDL",
+  "description": "Mapa interactivo del campus Tec de Monterrey Guadalajara: busca edificios, filtra por categoría y calcula rutas a pie, incluso sin conexión.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FFFFFF",
+  "theme_color": "#14181B",
+  "icons": [
+    { "src": "assets/img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "assets/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
