@@ -2,108 +2,186 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mapa del Borrego Merodeador</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#FFFFFF" id="meta-theme-color">
+  <meta name="description" content="Mapa interactivo del campus Tec de Monterrey Guadalajara: busca edificios, filtra por categoría y calcula rutas a pie.">
+  <title>Mapa del Borrego Merodeador · Campus GDL</title>
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐏</text></svg>">
+
+  <!-- Tiles: adelantar el handshake de red -->
+  <link rel="preconnect" href="https://a.basemaps.cartocdn.com" crossorigin>
+  <link rel="preconnect" href="https://b.basemaps.cartocdn.com" crossorigin>
+  <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin>
+
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+  <link rel="stylesheet" href="assets/css/tokens.css" />
   <link rel="stylesheet" href="assets/css/style.css" />
 </head>
 <body>
   <div id="app">
 
-    <aside id="sidebar">
-      <div id="sidebar-header">
-        <div class="header-brand">
-          <span class="header-icon">🐏</span>
-          <div class="header-text">
+    <!-- ══ PANEL / BOTTOM SHEET ══════════════════════════════ -->
+    <aside id="sidebar" class="panel" role="complementary" aria-label="Buscador y lista de edificios">
+      <div id="sheet-handle" aria-hidden="true"><span></span></div>
+
+      <header id="panel-header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">🐏</span>
+          <div class="brand-text">
             <h1>Borrego Merodeador</h1>
-            <p>Mapa del Campus GDL</p>
+            <p>Campus Tec GDL</p>
           </div>
         </div>
-        <div id="sidebar-header-btns">
-          <button id="sidebar-close" title="Cerrar">×</button>
-          <button id="locate-btn" title="Mi ubicación">⊕</button>
+        <button id="theme-toggle" class="icon-btn" aria-label="Cambiar entre tema claro y oscuro">
+          <svg class="i-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="i-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
+        </button>
+      </header>
+
+      <!-- ── Vista EXPLORAR ── -->
+      <div id="explore-view" class="panel-view">
+        <div id="search-region">
+          <div id="search-wrap">
+            <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="search" type="text" placeholder="Buscar edificio…" autocomplete="off"
+                   role="combobox" aria-expanded="false" aria-controls="search-results"
+                   aria-autocomplete="list" aria-label="Buscar edificio">
+            <kbd id="search-kbd" aria-hidden="true">/</kbd>
+            <button id="search-clear" class="icon-btn sm" aria-label="Limpiar búsqueda" hidden>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <ul id="search-results" role="listbox" aria-label="Resultados de búsqueda" hidden></ul>
         </div>
-      </div>
 
-      <div id="tabs">
-        <button class="tab active" data-tab="explore">Explorar</button>
-        <button class="tab" data-tab="route">Ruta</button>
-      </div>
-
-      <!-- TAB: EXPLORAR -->
-      <div id="tab-explore" class="tab-content active">
-        <div id="search-wrap">
-          <input id="search" type="text" placeholder="Buscar edificio…" autocomplete="off" />
-          <button id="search-clear" aria-label="Limpiar">×</button>
+        <div id="filters-bar">
+          <button id="filter-reset" hidden>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.4 2.6L3 8"/><path d="M3 3v5h5"/></svg>
+            Limpiar filtro
+          </button>
+          <div id="chip-row" class="chip-row" role="group" aria-label="Filtrar por categoría"></div>
         </div>
-        <div id="filters"></div>
-        <ul id="building-list"></ul>
+
+        <ul id="building-list" aria-label="Lista de edificios"></ul>
       </div>
 
-      <!-- TAB: RUTA -->
-      <div id="tab-route" class="tab-content">
-        <div id="route-panel">
-          <div class="route-card">
-            <div class="route-row">
-              <span class="route-dot from"></span>
-              <div class="route-field">
-                <label>Origen</label>
-                <div id="route-from-name" class="route-name placeholder">Selecciona en el mapa</div>
-              </div>
-              <button class="route-clear" id="clear-from" title="Limpiar">×</button>
+      <!-- ── Vista RUTA (capa sobre explorar) ── -->
+      <div id="route-view" class="panel-view" hidden aria-label="Planificador de ruta">
+        <div id="route-head">
+          <button id="route-back" class="icon-btn" aria-label="Volver a explorar">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <h2>Cómo llegar</h2>
+        </div>
+
+        <div class="route-card">
+          <div class="route-row">
+            <span class="route-dot from" aria-hidden="true"></span>
+            <div class="route-field">
+              <label id="lbl-from">Origen</label>
+              <div id="route-from-name" class="route-name placeholder" aria-labelledby="lbl-from">Selecciona en el mapa</div>
             </div>
-            <div class="route-divider"></div>
-            <div class="route-row">
-              <span class="route-dot to"></span>
-              <div class="route-field">
-                <label>Destino</label>
-                <div id="route-to-name" class="route-name placeholder">Selecciona en el mapa</div>
-              </div>
-              <button class="route-clear" id="clear-to" title="Limpiar">×</button>
+            <button class="icon-btn sm route-clear" id="clear-from" aria-label="Limpiar origen">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="route-swap-line"><button id="route-swap" class="icon-btn sm" aria-label="Invertir origen y destino">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 3 4 4-4 4"/><path d="M21 7H3"/><path d="m7 21-4-4 4-4"/><path d="M3 17h18"/></svg>
+          </button></div>
+          <div class="route-row">
+            <span class="route-dot to" aria-hidden="true"></span>
+            <div class="route-field">
+              <label id="lbl-to">Destino</label>
+              <div id="route-to-name" class="route-name placeholder" aria-labelledby="lbl-to">Selecciona en el mapa</div>
             </div>
+            <button class="icon-btn sm route-clear" id="clear-to" aria-label="Limpiar destino">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
           </div>
-          <div id="route-summary"></div>
-          <div id="route-hint">
-            <p>Activa el modo ruta y haz clic en dos edificios del mapa.</p>
-          </div>
-          <button id="route-mode-btn">Activar modo ruta</button>
         </div>
+
+        <div id="route-summary" hidden></div>
+        <p id="route-hint">Elige origen y destino tocando dos edificios en el mapa, o usa <b>Cómo llegar</b> desde la ficha de un edificio.</p>
+        <button id="route-select-toggle" class="btn-primary">Elegir en el mapa</button>
       </div>
     </aside>
 
-    <main id="map-wrap">
-      <button id="menu-btn" title="Menú">☰</button>
+    <!-- ══ MAPA ══════════════════════════════════════════════ -->
+    <main id="map-wrap" role="main" aria-label="Mapa del campus">
       <div id="map"></div>
 
-      <!-- PANEL DE INFO (flotante, sobre el mapa) -->
-      <div id="info-panel" class="hidden">
-        <button id="info-close">×</button>
+      <!-- Controles apilados, esquina inferior derecha -->
+      <div id="map-controls">
+        <button id="locate-btn" class="map-btn" aria-label="Centrar en mi ubicación">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        </button>
+        <button id="layer-toggle" class="map-btn layer-btn" aria-label="Cambiar tipo de mapa">
+          <span class="layer-thumb"></span>
+          <span class="layer-label">Satélite</span>
+        </button>
+      </div>
+
+      <!-- Aviso de selección de ruta -->
+      <div id="route-select-badge" class="floating-badge" hidden>
+        <span id="route-select-text">Toca un edificio para el origen</span>
+        <button id="route-select-cancel" class="badge-btn">Cancelar</button>
+      </div>
+
+      <!-- Ficha de edificio -->
+      <div id="info-panel" class="hidden" role="dialog" aria-modal="false" aria-label="Detalle de edificio">
+        <button id="info-close" class="icon-btn sm" aria-label="Cerrar ficha">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
         <div id="info-category"></div>
         <h2 id="info-name"></h2>
         <div id="info-fields"></div>
         <div id="info-actions">
-          <div class="info-actions-row">
-            <button class="action-btn from-btn" id="btn-set-from">📍 Desde aquí</button>
-            <button class="action-btn to-btn" id="btn-set-to">🚩 Hasta aquí</button>
-          </div>
-          <button class="action-btn loc-btn" id="btn-from-location">📍 Ruta desde mi ubicación</button>
+          <button class="btn-primary" id="btn-directions">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/></svg>
+            Cómo llegar
+          </button>
+          <button class="btn-ghost" id="btn-set-from">Desde aquí</button>
         </div>
       </div>
 
-      <!-- TOGGLE capa de mapa -->
-      <button id="layer-toggle" title="Cambiar vista">Mapa</button>
-
-      <!-- BADGE de modo ruta activo -->
-      <div id="route-mode-badge" class="hidden">
-        Modo ruta activo · haz clic en un edificio
-        <button id="cancel-route-mode">Cancelar</button>
+      <!-- Barra inferior de navegación (Waze-style) -->
+      <div id="nav-bar" hidden role="status" aria-live="polite">
+        <div class="nav-info">
+          <div class="nav-primary"><span id="nav-time">—</span></div>
+          <div class="nav-secondary"><span id="nav-dist">—</span> · <span id="nav-to">…</span></div>
+        </div>
+        <button id="nav-cancel" class="icon-btn" aria-label="Cancelar ruta">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
       </div>
     </main>
-
   </div>
-  <div id="sidebar-overlay"></div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <div id="sheet-scrim" aria-hidden="true"></div>
+
+  <!-- ══ ONBOARDING / PRIVACIDAD ═══════════════════════════ -->
+  <div id="onboard" class="modal-wrap" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
+      <span class="onboard-mark" aria-hidden="true">🐏</span>
+      <h2 id="onboard-title">Bienvenido al mapa del campus</h2>
+      <ul class="onboard-list">
+        <li>Toca cualquier edificio para ver qué hay dentro.</li>
+        <li>Filtra por categoría con los chips de arriba.</li>
+        <li>¿Perdido? Toca <b>⊕</b> para ubicarte.</li>
+      </ul>
+      <p class="onboard-privacy">Tu ubicación solo se usa en tu dispositivo para orientarte y calcular rutas. No se envía a ningún servidor.</p>
+      <button id="onboard-accept" class="btn-primary">Entendido</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"
+          integrity="sha512-BwHfrr4c9kmRkLw6iXFdzcdWV/PGkVgiIyIWLLlTSXzWQzxuSg4DiQUCpauz/EWjgk5TYQqX/kvn9pG1NpYfqg=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"
+          integrity="sha256-42IbU8t3tOwwbexB7ZVRHm3YDRf65aBPPjRtIUufj5I="
+          crossorigin="anonymous"></script>
   <script src="assets/js/router.js"></script>
   <script src="assets/js/map.js"></script>
 </body>

@@ -1,0 +1,94 @@
+/* ============================================================
+   tokens.css — Sistema de diseño · Borrego Merodeador
+   Única fuente de verdad para color, tipografía, espaciado,
+   forma y capas. Se enlaza ANTES de style.css.
+
+   Dirección: el mapa es la figura, la UI es el marco.
+   Chrome neutro y silencioso; un único acento cálido reservado
+   EXCLUSIVAMENTE para navegación / ruta / acción primaria.
+   ============================================================ */
+
+:root {
+  /* ── Neutros — chrome de UI ───────────────────────────── */
+  --c-bg:        #FFFFFF;
+  --c-surface:   #F5F6F7;
+  --c-surface-2: #EBEDEF;
+  --c-border:    #DCE0E3;
+  --c-text:      #14181B;
+  --c-text-mut:  #5C666E;
+
+  /* ── Acento — SOLO ruta, navegación y acción primaria ── */
+  --c-accent:      #E8590C;
+  --c-accent-hov:  #D34E08;
+  --c-accent-weak: #FFF0E6;
+  --c-accent-ink:  #FFFFFF;
+
+  /* ── Estado ───────────────────────────────────────────── */
+  --c-focus:  #1971C2;
+  --c-danger: #C92A2A;
+
+  /* ── Paleta de categorías (Okabe–Ito, color-blind safe) ─
+     8 grupos cromáticos. `-line` = borde oscurecido para que
+     el relleno se lea sobre satélite (imprescindible en amarillo). */
+  --cat-academic:       #0072B2;  --cat-academic-line:   #005A8F;
+  --cat-school:         #56B4E9;  --cat-school-line:     #2A8FCC;
+  --cat-sports:         #009E73;  --cat-sports-line:     #007D5B;
+  --cat-dorm:           #E69F00;  --cat-dorm-line:       #B37B00;
+  --cat-food:           #D55E00;  --cat-food-line:       #A84A00;
+  --cat-services:       #7F7F7F;  --cat-services-line:   #5C5C5C;
+  --cat-commercial:     #F0E442;  --cat-commercial-line: #8A7D00;
+  --cat-other:          #CC79A7;  --cat-other-line:      #A85E85;
+
+  /* ── Ruta ─────────────────────────────────────────────── */
+  --route-pending: var(--c-accent);
+  --route-done:    var(--c-text-mut);
+  --route-casing:  #FFFFFF;
+  --route-origin:  var(--c-text);
+  --route-dest:    var(--c-accent);
+
+  /* ── Tipografía ───────────────────────────────────────── */
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fs-xs: 0.6875rem;  /* 11 — metadatos, conteos */
+  --fs-sm: 0.8125rem;  /* 13 — cuerpo secundario */
+  --fs-md: 0.9375rem;  /* 15 — cuerpo, items de lista */
+  --fs-lg: 1.125rem;   /* 18 — título de panel */
+  --fs-xl: 1.375rem;   /* 22 — header */
+  --lh-tight: 1.25;
+  --lh-body: 1.5;
+
+  /* ── Espaciado — escala de 4 ──────────────────────────── */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
+  --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+
+  /* ── Forma y elevación ────────────────────────────────── */
+  --r-sm: 6px; --r-md: 10px; --r-lg: 16px; --r-pill: 999px;
+  --sh-1: 0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.10);
+  --sh-2: 0 4px 12px rgba(0,0,0,.12);
+  --sh-3: 0 -2px 16px rgba(0,0,0,.16);
+
+  /* ── Layout ───────────────────────────────────────────── */
+  --sidebar-w: 380px;
+  --z-map: 400; --z-panel: 1000; --z-sheet: 1100; --z-modal: 2000;
+
+  /* ── Transición base ──────────────────────────────────── */
+  --t: .15s ease;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --c-bg:        #14181B;
+  --c-surface:   #1D2226;
+  --c-surface-2: #272D32;
+  --c-border:    #363D43;
+  --c-text:      #E9ECEF;
+  --c-text-mut:  #9BA5AD;
+  --c-accent-weak: #3A2015;
+  --c-focus: #74C0FC;
+  --route-casing: #14181B;
+
+  /* Amarillo brilla demasiado en oscuro: baja un punto su borde */
+  --cat-commercial-line: #C9B93A;
+
+  color-scheme: dark;
+}

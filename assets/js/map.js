@@ -1,689 +1,805 @@
-/* ── Categories ───────────────────────────────────────── */
-const CATS = {
-  academic:   { label: 'Académico',    icon: '🎓', color: '#2563eb', fill: '#3b82f6' },
-  school:     { label: 'Preparatoria', icon: '📚', color: '#7c3aed', fill: '#8b5cf6' },
-  sports:     { label: 'Deportes',     icon: '⚽', color: '#16a34a', fill: '#4ade80' },
-  dorm:       { label: 'Residencias',  icon: '🏠', color: '#059669', fill: '#10b981' },
-  food:       { label: 'Comida',       icon: '🍽️', color: '#b45309', fill: '#f59e0b' },
-  services:   { label: 'Servicios',    icon: '🏥', color: '#0e7490', fill: '#06b6d4' },
-  commercial: { label: 'Comercial',    icon: '🛒', color: '#b91c1c', fill: '#ef4444' },
-  other:      { label: 'Otros',        icon: '📍', color: '#475569', fill: '#94a3b8' },
-};
+'use strict';
+/* ============================================================
+   map.js — Borrego Merodeador
+   Vanilla JS + Leaflet. El mapa es la figura; la UI, el marco.
+   ============================================================ */
 
+const $  = (id) => document.getElementById(id);
+const mq = (q) => window.matchMedia(q);
+const FINE_POINTER = () => mq('(hover: hover) and (pointer: fine)').matches;
+const REDUCED_MOTION = () => mq('(prefers-reduced-motion: reduce)').matches;
+const WALK_SPEED = 1.35; // m/s — velocidad peatonal (Fase 3.2)
+
+/* ── Categorías: etiqueta + icono (SVG, no emoji) ───────────
+   El color es la ÚNICA fuente de verdad y vive en tokens.css.
+   categoryColor() lo resuelve una sola vez (necesario para canvas). */
+const ICONS = {
+  academic:   '<path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1 2.7 3 6 3s6-2 6-3v-5"/>',
+  school:     '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>',
+  sports:     '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  dorm:       '<path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/>',
+  food:       '<path d="M7 3v18"/><path d="M4 3v6a3 3 0 0 0 6 0V3"/><path d="M17 3c-1.6 0-2.7 2-2.7 5s1.1 4 2.7 4v9"/>',
+  services:   '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M5 5l4.2 4.2M14.8 14.8 19 19M19 5l-4.2 4.2M9.2 14.8 5 19"/>',
+  commercial: '<path d="M6 2 4 6v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6l-2-4Z"/><path d="M4 6h16"/><path d="M15 10a3 3 0 0 1-6 0"/>',
+  other:      '<path d="M20 10c0 5.5-8 12-8 12s-8-6.5-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+};
+const CATEGORY_STYLE = {
+  academic:   { label: 'Académico'    },
+  school:     { label: 'Preparatoria' },
+  sports:     { label: 'Deportes'     },
+  dorm:       { label: 'Residencias'  },
+  food:       { label: 'Comida'       },
+  services:   { label: 'Servicios'    },
+  commercial: { label: 'Comercial'    },
+  other:      { label: 'Vida estudiantil' },
+};
+const ORDER = ['academic','school','sports','dorm','food','services','commercial','other'];
+
+// Resolver colores de CSS una vez (canvas no entiende var()).
+const _cs = getComputedStyle(document.documentElement);
+function cssVar(name) { return _cs.getPropertyValue(name).trim(); }
+const CAT_COLOR = {}, CAT_LINE = {};
+for (const k of ORDER) { CAT_COLOR[k] = cssVar(`--cat-${k}`); CAT_LINE[k] = cssVar(`--cat-${k}-line`); }
+function categoryColor(cat) { return CAT_COLOR[cat] || CAT_COLOR.other; }
+function categoryLine(cat)  { return CAT_LINE[cat]  || CAT_LINE.other; }
+function catIcon(cat, size = 22) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[cat] || ICONS.other}</svg>`;
+}
+
+/* ── Clasificación de categoría (derivada, no almacenada) ──── */
 function getCategory(p) {
   const b = p.building, a = p.amenity;
   const n = (p.name || '').toLowerCase();
-
-  // OSM-tagged food & drink
   if (['restaurant','cafe','fast_food','food_court','ice_cream'].includes(a) || p.cuisine) return 'food';
-  // OSM-tagged commercial
   if (b === 'commercial' || p.shop) return 'commercial';
-  // OSM-tagged dormitory
   if (b === 'dormitory') return 'dorm';
-
-  // Sports — name-based, checked before building=university so gradas/domo/etc. aren't academic
   if (/alberca|atletismo|f[uú]tbol|tenis|padel|domo|gimna|borregos|e.?sport|ping|ajedrez|vestidor|ducha|gradas|cancha|futbolito|crossfit|voley|ejercicio/.test(n)) return 'sports';
-
-  // Food — named places without OSM food tags
   if (/cafeter[ií]a|güich|guich|chilaquiles|gongcha|c[oó]rdoba|kiosko|cocina|comedor|area.de.comer|juvijues|yum/.test(n)) return 'food';
-
-  // Commercial — name-based (oxxo moved here from food)
   if (/tec.?store|bazar|copiroyal|papeler[ií]a|oxxo/.test(n)) return 'commercial';
-
-  // Services — access points, admin, support, cultural, infrastructure
   if (/caseta|entrada|salida|acceso|admisi[oó]n|direcci[oó]n|rector|administrativ|bienestar|social|lactancia|locatec|tecmed|congresos|difusi[oó]n|biciclet|elevador|herramienta|impresora|mentor|soporte|it.?support|servicios?|services|mantenimiento|movilidad|planta.*(agua|tratamiento)/.test(n)) return 'services';
   if (/auditorio|biblioteca|cosas perdidas|sal[oó]n|salas?|piano|emprendimiento/.test(n)) return 'services';
-
-  // Preparatoria — before building=university since some prepa buildings carry that tag
   if (/prepa/.test(n) || b === 'school') return 'school';
-
-  // Academic — generic university buildings
   if (b === 'university') return 'academic';
-
-  // Academic — name-based fallback for buildings missing the OSM tag
   if (/ingenier[ií]|eiad/.test(n)) return 'academic';
-
   return 'other';
+}
+// Etiquetas mayores (visibles a menor zoom para no encabalgar). Los
+// sub-edificios ("Edificio 4-3") pasan a menores para reducir el solape.
+function isMajor(cat, name) {
+  const n = name || '';
+  if (/\d+\s*-\s*\d+/.test(n)) return false;
+  return cat === 'academic' || cat === 'school' ||
+    /auditorio|biblioteca|congresos|card|rector|residencias|eiad|ems|pabell/i.test(n);
 }
 
 function normalize(s) {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  return (s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
 }
-
-function endpointLatLng(ep) {
-  if (ep._isLocation) return [ep.lat, ep.lng];
-  return centroid(ep.geometry);
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371000, toRad = x => x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
-function endpointName(ep) {
-  if (!ep) return null;
-  if (ep._isLocation) return ep.name;
-  return ep.properties?.name || 'Sin nombre';
-}
-
 function centroid(geometry) {
-  if (geometry.type === 'Point') {
-    return [geometry.coordinates[1], geometry.coordinates[0]];
-  }
+  if (geometry.type === 'Point') return [geometry.coordinates[1], geometry.coordinates[0]];
   const ring = geometry.coordinates[0];
   let lat = 0, lng = 0;
   for (const [x, y] of ring) { lng += x; lat += y; }
   return [lat / ring.length, lng / ring.length];
 }
+function fmtDist(m) { return m < 1000 ? `${Math.round(m/10)*10} m` : `${(m/1000).toFixed(1)} km`; }
+function fmtTime(m) { const min = Math.max(1, Math.round(m / WALK_SPEED / 60)); return `${min} min`; }
 
-function defaultStyle(layer) {
-  const cat = getCategory(layer.feature.properties);
-  const c = CATS[cat];
-  const isPoint = layer instanceof L.CircleMarker;
-  return { color: c.color, weight: 1.5, fillColor: c.fill, fillOpacity: isPoint ? 0.7 : 0.3 };
-}
-
+/* ── Detalle: etiquetas humanas ────────────────────────────── */
 function humanLabel(key) {
-  const map = {
-    building: 'Tipo', amenity: 'Servicio', cuisine: 'Cocina',
-    opening_hours: 'Horario', website: 'Web', wheelchair: 'Accesible',
-    'building:levels': 'Pisos', outdoor_seating: 'Terraza',
-  };
-  return map[key] || key;
+  return ({ building:'Tipo', amenity:'Servicio', cuisine:'Cocina', opening_hours:'Horario',
+    website:'Web', wheelchair:'Accesible', 'building:levels':'Pisos', outdoor_seating:'Terraza' })[key] || key;
 }
-
 function humanValue(key, val) {
-  if (key === 'wheelchair') return ({ yes: 'Sí', no: 'No', limited: 'Parcial' }[val] || val);
+  if (key === 'wheelchair') return ({ yes:'Sí', no:'No', limited:'Parcial' }[val] || val);
   if (key === 'outdoor_seating') return val === 'yes' ? 'Sí' : 'No';
-  if (key === 'website') return `<a href="${val}" target="_blank" rel="noopener">${val.replace(/^https?:\/\//, '')}</a>`;
-  if (key === 'building') {
-    const labels = {
-      university: 'Universidad', school: 'Escuela', dormitory: 'Residencias',
-      commercial: 'Comercial', house: 'Casa', yes: 'Edificio', terrace: 'Terraza',
-      roof: 'Techo', residential: 'Residencial', guardhouse: 'Caseta',
-    };
-    return labels[val] || val;
-  }
-  if (key === 'amenity') {
-    const labels = {
-      restaurant: 'Restaurante', cafe: 'Café', fast_food: 'Comida rápida',
-      food_court: 'Patio de comidas', library: 'Biblioteca', bank: 'Banco',
-      pharmacy: 'Farmacia', clinic: 'Clínica', toilets: 'Baños',
-      fuel: 'Gasolinera', ice_cream: 'Heladería', shelter: 'Refugio',
-    };
-    return labels[val] || val;
-  }
+  if (key === 'website') return `<a href="${val}" target="_blank" rel="noopener">${val.replace(/^https?:\/\//,'')}</a>`;
+  if (key === 'building') return ({ university:'Universidad', school:'Escuela', dormitory:'Residencias',
+    commercial:'Comercial', house:'Casa', yes:'Edificio', terrace:'Terraza', roof:'Techo',
+    residential:'Residencial', guardhouse:'Caseta' }[val] || val);
+  if (key === 'amenity') return ({ restaurant:'Restaurante', cafe:'Café', fast_food:'Comida rápida',
+    food_court:'Patio de comidas', library:'Biblioteca', bank:'Banco', pharmacy:'Farmacia',
+    clinic:'Clínica', toilets:'Baños', fuel:'Gasolinera', ice_cream:'Heladería', shelter:'Refugio' }[val] || val);
   return val;
 }
 
-/* ── Map init ─────────────────────────────────────────── */
-const MAX_BOUNDS = L.latLngBounds([20.727, -103.462], [20.741, -103.447]);
+/* ── Tema + basemap ────────────────────────────────────────── */
+const LS = { theme:'bm.theme', basemap:'bm.basemap', onboard:'bm.onboarded' };
+const load = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const save = (k,v) => { try { localStorage.setItem(k,v); } catch {} };
+
+const TILE_ATTR_CARTO = '&copy; OpenStreetMap &copy; CARTO';
+const tiles = {
+  light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:20, attribution: TILE_ATTR_CARTO }),
+  dark:  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',  { maxZoom:20, attribution: TILE_ATTR_CARTO }),
+  satelite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:20, attribution: 'Tiles &copy; Esri' }),
+};
+// Miniaturas sintéticas (offline-safe, <1KB) para el toggle de capas.
+const THUMB = {
+  satelite: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Crect width='56' height='56' fill='%233b5a34'/%3E%3Ccircle cx='16' cy='18' r='12' fill='%234a6b3f'/%3E%3Ccircle cx='41' cy='31' r='14' fill='%235c7a4a'/%3E%3Crect x='30' y='6' width='10' height='10' fill='%237a6b52'/%3E%3Crect x='6' y='40' width='12' height='9' fill='%238a7a5e'/%3E%3C/svg%3E\")",
+  calles:   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Crect width='56' height='56' fill='%23eceff1'/%3E%3Crect y='22' width='56' height='7' fill='%23fff'/%3E%3Crect x='24' width='7' height='56' fill='%23fff'/%3E%3Crect x='4' y='4' width='14' height='14' fill='%23cfe8d0'/%3E%3Crect x='38' y='34' width='14' height='16' fill='%23d9e2e6'/%3E%3C/svg%3E\")",
+};
+
+let theme      = load(LS.theme)   === 'dark' ? 'dark' : 'light';
+let basemapKind = load(LS.basemap) === 'satelite' ? 'satelite' : 'calles';
+
+function activeTileKey() { return basemapKind === 'satelite' ? 'satelite' : (theme === 'dark' ? 'dark' : 'light'); }
+function applyBasemap() {
+  for (const t of Object.values(tiles)) if (map.hasLayer(t)) map.removeLayer(t);
+  tiles[activeTileKey()].addTo(map).bringToBack();
+  $('map').classList.toggle('satellite', basemapKind === 'satelite');
+  // El toggle muestra la vista ALTERNATIVA
+  const alt = basemapKind === 'satelite' ? 'calles' : 'satelite';
+  $('layer-toggle').querySelector('.layer-thumb').style.backgroundImage = THUMB[alt];
+  $('layer-toggle').querySelector('.layer-label').textContent = alt === 'satelite' ? 'Satélite' : 'Calles';
+  $('layer-toggle').setAttribute('aria-label', `Cambiar a vista ${alt === 'satelite' ? 'satélite' : 'de calles'}`);
+}
+function applyTheme(t) {
+  theme = t;
+  document.documentElement.setAttribute('data-theme', t);
+  $('meta-theme-color').setAttribute('content', t === 'dark' ? '#14181B' : '#FFFFFF');
+  save(LS.theme, t);
+  applyBasemap();
+}
+
+/* ── Init mapa ─────────────────────────────────────────────── */
+document.documentElement.setAttribute('data-theme', theme);
+$('meta-theme-color').setAttribute('content', theme === 'dark' ? '#14181B' : '#FFFFFF');
+
 const map = L.map('map', {
+  preferCanvas: true,            // 147 features: canvas > SVG en gama media
   zoomControl: false,
-  minZoom: 17,
-  maxBounds: MAX_BOUNDS,
-  maxBoundsViscosity: 1.0,
-}).setView([20.7343, -103.4559], 16);
-L.control.zoom({ position: 'topright' }).addTo(map);
+  minZoom: 15, maxZoom: 20,
+  maxBoundsViscosity: 0.8,
+  attributionControl: true,
+}).setView([20.7347, -103.4538], 16);
 
-const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+applyBasemap();
+
+$('theme-toggle').addEventListener('click', () => applyTheme(theme === 'dark' ? 'light' : 'dark'));
+$('layer-toggle').addEventListener('click', () => {
+  basemapKind = basemapKind === 'satelite' ? 'calles' : 'satelite';
+  save(LS.basemap, basemapKind);
+  applyBasemap();
 });
 
-const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 19,
-  attribution: 'Tiles &copy; Esri',
-});
+/* ── Estilos de polígono (opacidad diferencial, Fase 2.1) ──── */
+const STYLE_BASE = (cat) => ({ color: categoryLine(cat), weight: 2, opacity: .9, fillColor: categoryColor(cat), fillOpacity: .18 });
+const STYLE_HOVER    = { weight: 3,   fillOpacity: .42 };
+const STYLE_SELECTED = { weight: 3.5, fillOpacity: .55 };
+const STYLE_DIMMED   = { weight: 1,   opacity: .35, fillOpacity: .05 };
 
-let isSatellite = true;
-satelliteLayer.addTo(map);
-
-document.getElementById('layer-toggle').addEventListener('click', () => {
-  isSatellite = !isSatellite;
-  const btn = document.getElementById('layer-toggle');
-  if (isSatellite) {
-    map.removeLayer(osmLayer);
-    satelliteLayer.addTo(map);
-    btn.textContent = 'Mapa';
-  } else {
-    map.removeLayer(satelliteLayer);
-    osmLayer.addTo(map);
-    btn.textContent = 'Satélite';
-  }
-});
-
-/* ── Campus router ────────────────────────────────────── */
-let campusRouter = null;
-let entryPoints = []; // { name, lat, lng } — from Point features in paths.geojson
-
-/* ── State ────────────────────────────────────────────── */
-let allFeatures = [];
+/* ── Estado ────────────────────────────────────────────────── */
+let allFeatures = [], buildings = [];   // buildings: registros enriquecidos para búsqueda/orden
+let campusRouter = null, entryPoints = [];
+let fuse = null;
 let activeFilter = 'all';
-let activeItem = null;
-let routeMode = false;
-let routeFrom = null;
-let routeTo = null;
-let routeLayer = null;
-let userMarker = null;
-let userLocation = null;
-let selectedLayer = null;
+let selectedLayer = null, activeFeature = null;
+let userLocation = null, userMarker = null, userHeading = null;
+const registry = new Map();   // _fid -> { feature, layer, item }
 
-/* ── GeoJSON layer ────────────────────────────────────── */
+/* ── Capa GeoJSON ──────────────────────────────────────────── */
 const geoLayer = L.geoJSON(null, {
-  style: feature => {
-    const cat = getCategory(feature.properties);
-    const c = CATS[cat];
-    return { color: c.color, weight: 1.5, fillColor: c.fill, fillOpacity: 0.3 };
+  style: (f) => STYLE_BASE(getCategory(f.properties)),
+  pointToLayer: (f, latlng) => {
+    const cat = getCategory(f.properties);
+    return L.circleMarker(latlng, { radius: 6, color: categoryLine(cat), weight: 2, opacity: .9, fillColor: categoryColor(cat), fillOpacity: .7 });
   },
-  pointToLayer(feature, latlng) {
-    const cat = getCategory(feature.properties);
-    const c = CATS[cat];
-    return L.circleMarker(latlng, {
-      radius: 7,
-      color: c.color,
-      weight: 1.5,
-      fillColor: c.fill,
-      fillOpacity: 0.7,
-    });
-  },
-  onEachFeature(feature, layer) {
-    layer.on('click', () => onBuildingClick(feature, layer));
-    layer.on('mouseover', () => {
-      if (layer !== selectedLayer)
-        layer.setStyle({ fillOpacity: layer instanceof L.CircleMarker ? 0.95 : 0.55, weight: 2.5 });
-    });
-    layer.on('mouseout', () => {
-      if (layer !== selectedLayer) layer.setStyle(defaultStyle(layer));
-    });
+  onEachFeature(f, layer) {
+    const p = f.properties;
+    layer.on('click', () => onBuildingClick(f, layer, false));
+    layer.on('keypress', (e) => { if (e.originalEvent.key === 'Enter') onBuildingClick(f, layer, false); });
+    // Cross-highlight solo en punteros finos (Fase 3.3)
+    layer.on('mouseover', () => { if (FINE_POINTER()) highlight(p._fid, 'map'); });
+    layer.on('mouseout',  () => { if (FINE_POINTER()) unhighlight(p._fid); });
+    // Etiqueta permanente para polígonos con nombre (Fase 2.5)
+    if (f.geometry.type === 'Polygon' && p.name) {
+      const cat = getCategory(p);
+      layer.bindTooltip(p.name, { permanent: true, direction: 'center', className: `bldg-label ${isMajor(cat, p.name) ? 'major' : 'minor'}`, opacity: 1 });
+    }
   },
 });
 
-/* ── Load paths ───────────────────────────────────────── */
+/* ── Carga de caminos (router) ─────────────────────────────── */
 fetch('data/paths.geojson')
   .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
   .then(data => {
-    entryPoints = data.features
-      .filter(f => f.geometry.type === 'Point')
-      .map(f => ({
-        name: normalize(f.properties.name || ''),
-        lat: f.geometry.coordinates[1],
-        lng: f.geometry.coordinates[0],
-      }));
-
+    entryPoints = data.features.filter(f => f.geometry.type === 'Point')
+      .map(f => ({ name: normalize(f.properties.name || ''), lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] }));
     campusRouter = new CampusRouter();
     campusRouter.load(data);
-    console.info(`[Router] OK — ${entryPoints.length} entradas, router listo`);
   })
-  .catch(err => console.error('[Router] paths.geojson falló — OSRM de respaldo:', err));
+  .catch(err => console.error('[Router] paths.geojson falló:', err));
 
-/* ── Load data ────────────────────────────────────────── */
+/* ── Carga de edificios ────────────────────────────────────── */
 fetch('data/campus.geojson')
   .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
   .then(data => {
     data.features.forEach((f, i) => {
-      f.properties._fid = f.properties['@id'] || `local_${i}`;
+      const p = f.properties;
+      p._fid = p['@id'] || `local_${i}`;
+      p._cat = getCategory(p);
+      p._center = centroid(f.geometry);
     });
     allFeatures = data.features;
-    geoLayer.addData(data);
-    geoLayer.addTo(map);
-    map.fitBounds(geoLayer.getBounds(), { padding: [20, 20] });
-    buildFilterChips();
-    renderList(allFeatures);
+    buildings = allFeatures.filter(f => f.properties.name).map(f => {
+      const p = f.properties;
+      const aliases = Array.isArray(p.aliases) ? p.aliases : [];
+      return {
+        fid: p._fid, feature: f, name: p.name, cat: p._cat,
+        nameNorm: normalize(p.name),
+        aliasesNorm: [p.alt_name, p.short_name, ...aliases].filter(Boolean).map(normalize).join(' '),
+        categoryNorm: normalize(CATEGORY_STYLE[p._cat].label),
+      };
+    });
+
+    geoLayer.addData(data).addTo(map);
+    const bounds = geoLayer.getBounds().pad(0.25);
+    map.setMaxBounds(bounds);
+    map.fitBounds(geoLayer.getBounds(), { padding: [24, 24] });
+
+    // Índice de búsqueda (Fase 4.1)
+    if (window.Fuse) fuse = new Fuse(buildings, {
+      keys: [{ name:'nameNorm', weight:.7 }, { name:'aliasesNorm', weight:.25 }, { name:'categoryNorm', weight:.05 }],
+      threshold: .35, ignoreLocation: true, minMatchCharLength: 2,
+    });
+
+    buildChips();
+    renderList();
+    syncLabels();
+    handleDeepLink();
   })
   .catch(err => console.error('Error cargando GeoJSON:', err));
 
-/* ── Filter chips ─────────────────────────────────────── */
-function buildFilterChips() {
-  const counts = { all: allFeatures.length };
-  for (const cat of Object.keys(CATS)) {
-    counts[cat] = allFeatures.filter(f => getCategory(f.properties) === cat).length;
-  }
-
-  const container = document.getElementById('filters');
-  const makeChip = (key, label) => {
-    const btn = document.createElement('button');
-    btn.className = 'filter-chip' + (key === 'all' ? ' active' : '');
-    btn.dataset.filter = key;
-    btn.textContent = label;
-    if (key !== 'all') btn.style.setProperty('--chip-color', CATS[key].fill);
-    btn.addEventListener('click', () => applyFilter(key));
-    return btn;
-  };
-
-  container.appendChild(makeChip('all', `Todos (${counts.all})`));
-  for (const [key, cat] of Object.entries(CATS)) {
-    if (counts[key] > 0)
-      container.appendChild(makeChip(key, `${cat.icon} ${cat.label} (${counts[key]})`));
-  }
+/* ── Etiquetas por umbral de zoom (Fase 2.5) ───────────────── */
+const LABEL_MIN_ZOOM = 17, LABEL_ALL_ZOOM = 18;
+function syncLabels() {
+  const z = map.getZoom();
+  const m = $('map');
+  m.classList.toggle('labels-off', z < LABEL_MIN_ZOOM);
+  m.classList.toggle('labels-all', z >= LABEL_ALL_ZOOM);
 }
+map.on('zoomend', syncLabels);
 
+/* ── Chips de filtro (Fase 3.1) ────────────────────────────── */
+function buildChips() {
+  const counts = {};
+  for (const f of allFeatures) counts[f.properties._cat] = (counts[f.properties._cat] || 0) + 1;
+  const row = $('chip-row');
+  row.innerHTML = '';
+  for (const key of ORDER) {
+    if (!counts[key]) continue;
+    const btn = document.createElement('button');
+    btn.className = 'chip';
+    btn.dataset.filter = key;
+    btn.setAttribute('aria-pressed', 'false');
+    btn.style.setProperty('--chip-color', categoryColor(key));
+    btn.innerHTML = `<span class="chip-dot" aria-hidden="true"></span>${CATEGORY_STYLE[key].label} <span class="chip-count">${counts[key]}</span>`;
+    btn.addEventListener('click', () => applyFilter(activeFilter === key ? 'all' : key));
+    row.appendChild(btn);
+  }
+  $('filter-reset').addEventListener('click', () => applyFilter('all'));
+}
 function applyFilter(key) {
   activeFilter = key;
-  document.querySelectorAll('.filter-chip').forEach(c => {
-    c.classList.toggle('active', c.dataset.filter === key);
-  });
-  const q = document.getElementById('search').value.trim().toLowerCase();
-  const filtered = getFiltered(q);
-  renderList(filtered);
-  updateMapOpacity(filtered);
+  document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.filter === key)));
+  $('filter-reset').hidden = key === 'all';
+  renderList();
+  updateMapDim();
 }
-
-function getFiltered(q) {
-  return allFeatures.filter(f => {
-    const p = f.properties;
-    const name = (p.name || '').toLowerCase();
-    const matchCat = activeFilter === 'all' || getCategory(p) === activeFilter;
-    const matchQ = !q || name.includes(q) || (p.alt_name || '').toLowerCase().includes(q);
-    return matchCat && matchQ;
+function updateMapDim() {
+  registry.forEach(({ feature, layer }) => {
+    const on = activeFilter === 'all' || feature.properties._cat === activeFilter;
+    layer.setStyle(on ? STYLE_BASE(feature.properties._cat) : STYLE_DIMMED);
+    if (layer === selectedLayer) layer.setStyle(STYLE_SELECTED);
   });
 }
 
-function updateMapOpacity(filtered) {
-  const ids = new Set(filtered.map(f => f.properties._fid));
-  geoLayer.eachLayer(layer => {
-    const fid = layer.feature.properties._fid;
-    if (ids.has(fid)) {
-      layer.setStyle(defaultStyle(layer));
-    } else {
-      layer.setStyle({ fillOpacity: 0.05, color: '#94a3b8', weight: 0.5 });
-    }
-  });
+/* ── Lista de edificios (Fase 3.2) ─────────────────────────── */
+// 147 features renderizados de golpe es correcto; virtualizar solo si el
+// dataset supera ~400 elementos.
+function currentSet() {
+  return buildings.filter(b => activeFilter === 'all' || b.cat === activeFilter);
 }
-
-/* ── Building list ────────────────────────────────────── */
-function renderList(features) {
-  const ul = document.getElementById('building-list');
+function renderList() {
+  const ul = $('building-list');
   ul.innerHTML = '';
+  registry.forEach(v => { v.item = null; });
+  let set = currentSet();
 
-  const named = features.filter(f => f.properties.name);
-  const unnamed = features.filter(f => !f.properties.name);
+  if (!set.length) { ul.innerHTML = '<li class="list-empty">Sin resultados en esta categoría.</li>'; return; }
 
-  if (named.length === 0 && unnamed.length === 0) {
-    ul.innerHTML = '<li class="list-empty">Sin resultados</li>';
-    return;
-  }
-
-  for (const f of named) appendItem(ul, f);
-
-  if (unnamed.length > 0) {
-    const sep = document.createElement('li');
-    sep.className = 'list-empty';
-    sep.style.cssText = 'padding:8px 14px;font-size:11px;';
-    sep.textContent = `${unnamed.length} edificio${unnamed.length > 1 ? 's' : ''} sin nombre`;
-    ul.appendChild(sep);
+  const byDistance = !!userLocation;
+  if (byDistance) {
+    set = set.map(b => ({ ...b, dist: haversine(userLocation.lat, userLocation.lng, b.feature.properties._center[0], b.feature.properties._center[1]) }))
+             .sort((a, b) => a.dist - b.dist);
+    for (const b of set) ul.appendChild(itemEl(b, b.dist));
+  } else {
+    // Alfabético con headers de categoría pegajosos
+    set.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    if (activeFilter === 'all') {
+      for (const key of ORDER) {
+        const group = set.filter(b => b.cat === key);
+        if (!group.length) continue;
+        const h = document.createElement('li');
+        h.className = 'cat-header';
+        h.textContent = CATEGORY_STYLE[key].label;
+        ul.appendChild(h);
+        for (const b of group) ul.appendChild(itemEl(b, null));
+      }
+    } else {
+      for (const b of set) ul.appendChild(itemEl(b, null));
+    }
   }
 }
-
-function appendItem(ul, feature) {
-  const p = feature.properties;
-  const cat = getCategory(p);
-  const c = CATS[cat];
-
+function itemEl(b, dist) {
   const li = document.createElement('li');
-  li.className = 'building-item';
-  li.dataset.id = p._fid;
-  li.style.setProperty('--item-color', c.fill);
-  li.innerHTML = `
-    <span class="building-icon">${c.icon}</span>
-    <div class="building-item-text">
-      <div class="building-item-name">${p.name}</div>
-      <div class="building-item-sub">${c.label}</div>
-    </div>`;
-
-  li.addEventListener('click', () => {
-    const layer = findLayerById(p._fid);
-    if (layer) onBuildingClick(feature, layer, true);
-  });
-  ul.appendChild(li);
-}
-
-function findLayerById(id) {
-  let found = null;
-  geoLayer.eachLayer(l => { if (l.feature.properties._fid === id) found = l; });
-  return found;
-}
-
-/* ── Building click ───────────────────────────────────── */
-function onBuildingClick(feature, layer, fromList = false) {
-  if (routeMode) {
-    assignRoutePoint(feature);
-    return;
+  const btn = document.createElement('button');
+  btn.className = 'bldg-item';
+  btn.dataset.id = b.fid;
+  // -line (oscurecido) para que el glifo cumpla contraste incluso en amarillo
+  btn.style.setProperty('--item-color', categoryLine(b.cat));
+  const meta = dist != null
+    ? `${CATEGORY_STYLE[b.cat].label} · <span class="dist">${fmtDist(dist)} · ${fmtTime(dist)}</span>`
+    : CATEGORY_STYLE[b.cat].label;
+  btn.innerHTML = `<span class="bldg-ic">${catIcon(b.cat, 20)}</span>
+    <span class="bldg-txt"><span class="bldg-name">${b.name}</span><span class="bldg-sub">${meta}</span></span>`;
+  btn.addEventListener('click', () => { const r = registry.get(b.fid); if (r) onBuildingClick(r.feature, r.layer, true); });
+  if (FINE_POINTER()) {
+    btn.addEventListener('mouseover', () => highlight(b.fid, 'list'));
+    btn.addEventListener('mouseout',  () => unhighlight(b.fid));
   }
+  li.appendChild(btn);
+  const r = registry.get(b.fid); if (r) r.item = btn;
+  return li;
+}
 
+/* ── Registro id → { feature, layer, item } ────────────────── */
+function buildRegistry() {
+  geoLayer.eachLayer(layer => {
+    const p = layer.feature.properties;
+    registry.set(p._fid, { feature: layer.feature, layer, item: null });
+  });
+}
+geoLayer.on('add', buildRegistry);
+
+/* ── Cross-highlight lista ↔ mapa (Fase 3.3) ───────────────── */
+function highlight(id, source) {
+  const r = registry.get(id); if (!r) return;
+  if (r.layer !== selectedLayer) r.layer.setStyle(STYLE_HOVER).bringToFront();
+  if (r.item) {
+    r.item.classList.add('is-hot');
+    if (source === 'map') r.item.scrollIntoView({ block: 'nearest', behavior: REDUCED_MOTION() ? 'auto' : 'smooth' });
+  }
+}
+function unhighlight(id) {
+  const r = registry.get(id); if (!r) return;
+  if (r.layer !== selectedLayer) {
+    const on = activeFilter === 'all' || r.feature.properties._cat === activeFilter;
+    r.layer.setStyle(on ? STYLE_BASE(r.feature.properties._cat) : STYLE_DIMMED);
+  }
+  if (r.item) r.item.classList.remove('is-hot');
+}
+
+/* ── Selección + ficha ─────────────────────────────────────── */
+function onBuildingClick(feature, layer, fromList) {
+  if (routeSelecting) { assignRouteEndpoint(feature); return; }
   selectBuilding(feature, layer);
-  if (!fromList) scrollListToItem(feature.properties._fid);
-  if (fromList) {
-    const [lat, lng] = centroid(feature.geometry);
-    map.setView([lat, lng], Math.max(map.getZoom(), 18), { animate: true });
+  focusBuilding(layer, feature);
+  if (!fromList) {
+    const r = registry.get(feature.properties._fid);
+    if (r && r.item) r.item.scrollIntoView({ block: 'nearest', behavior: REDUCED_MOTION() ? 'auto' : 'smooth' });
   }
+  setDeepLink({ b: shortId(feature) });
 }
-
 function selectBuilding(feature, layer) {
-  if (selectedLayer) selectedLayer.setStyle(defaultStyle(selectedLayer));
-
-  selectedLayer = layer;
-  activeItem = feature;
-
-  layer.setStyle({ color: '#facc15', weight: 3, fillOpacity: 0.5, dashArray: null });
-  layer.bringToFront();
-
-  document.querySelectorAll('.building-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.id === feature.properties._fid);
-  });
-
-  showInfoPanel(feature);
+  if (selectedLayer && selectedLayer !== layer) {
+    const pcat = selectedLayer.feature.properties._cat;
+    const on = activeFilter === 'all' || pcat === activeFilter;
+    selectedLayer.setStyle(on ? STYLE_BASE(pcat) : STYLE_DIMMED);
+  }
+  selectedLayer = layer; activeFeature = feature;
+  layer.setStyle(STYLE_SELECTED); layer.bringToFront();
+  document.querySelectorAll('.bldg-item').forEach(el => el.classList.toggle('active', el.dataset.id === feature.properties._fid));
+  showInfo(feature);
+  if (mq('(max-width: 768px)').matches) snapSheet(0);   // peek: deja ver la ficha y el mapa
+}
+function focusBuilding(layer, feature) {
+  const isMobile = mq('(max-width: 768px)').matches;
+  const b = layer.getBounds ? layer.getBounds() : L.latLngBounds([feature.properties._center, feature.properties._center]);
+  const pad = isMobile
+    ? { paddingTopLeft: [20, 20], paddingBottomRight: [20, Math.round(window.innerHeight * 0.5)] }
+    : { paddingTopLeft: [$('sidebar').offsetWidth + 24, 24], paddingBottomRight: [24, 24] };
+  const opts = { ...pad, maxZoom: 19 };
+  if (REDUCED_MOTION() || !layer.getBounds) map.fitBounds(b, opts);
+  else map.flyToBounds(b, { ...opts, duration: .6 });
 }
 
-function scrollListToItem(id) {
-  const el = document.querySelector(`.building-item[data-id="${id}"]`);
-  if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-}
-
-/* ── Info panel ───────────────────────────────────────── */
-const INFO_KEYS = ['building', 'amenity', 'cuisine', 'opening_hours', 'website', 'building:levels', 'wheelchair', 'outdoor_seating'];
-
-function showInfoPanel(feature) {
-  const p = feature.properties;
-  const cat = getCategory(p);
-  const c = CATS[cat];
-
-  const panel = document.getElementById('info-panel');
-  document.getElementById('info-name').textContent = p.name || 'Sin nombre';
-
-  const badge = document.getElementById('info-category');
-  badge.textContent = `${c.icon} ${c.label}`;
-  badge.style.cssText = `background:${c.fill}22;color:${c.color};`;
-
-  const fields = document.getElementById('info-fields');
-  fields.innerHTML = '';
+const INFO_KEYS = ['building','amenity','cuisine','opening_hours','website','building:levels','wheelchair','outdoor_seating'];
+function showInfo(feature) {
+  const p = feature.properties, cat = p._cat;
+  $('info-name').textContent = p.name || 'Sin nombre';
+  const badge = $('info-category');
+  badge.innerHTML = `${catIcon(cat, 14)} ${CATEGORY_STYLE[cat].label}`;
+  badge.style.setProperty('--cat-color', categoryLine(cat));
+  const fields = $('info-fields'); fields.innerHTML = '';
   for (const key of INFO_KEYS) {
     if (!p[key]) continue;
-    const div = document.createElement('div');
-    div.className = 'info-field';
+    const div = document.createElement('div'); div.className = 'info-field';
     div.innerHTML = `<span class="info-field-label">${humanLabel(key)}</span><span>${humanValue(key, p[key])}</span>`;
     fields.appendChild(div);
   }
   if (p.alt_name) {
-    const div = document.createElement('div');
-    div.className = 'info-field';
+    const div = document.createElement('div'); div.className = 'info-field';
     div.innerHTML = `<span class="info-field-label">También</span><span>${p.alt_name}</span>`;
     fields.appendChild(div);
   }
-
+  const panel = $('info-panel');
   panel.classList.remove('hidden');
+  panel.setAttribute('tabindex', '-1');
+  panel.focus({ preventScroll: true });   // anuncia el diálogo al lector de pantalla
+  document.body.classList.add('info-open');
 }
-
-document.getElementById('info-close').addEventListener('click', () => {
-  document.getElementById('info-panel').classList.add('hidden');
+$('info-close').addEventListener('click', () => { const l = selectedLayer; deselect(); if (l) { const r = registry.get(l.feature.properties._fid); r?.item?.focus(); } });
+// Esc cierra la ficha (Fase 7 · escape-routes)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('info-panel').classList.contains('hidden') && onboard.hidden) deselect();
+});
+function deselect() {
+  $('info-panel').classList.add('hidden');
+  document.body.classList.remove('info-open');
   if (selectedLayer) {
-    selectedLayer.setStyle(defaultStyle(selectedLayer));
-    selectedLayer = null;
-    activeItem = null;
+    const pcat = selectedLayer.feature.properties._cat;
+    const on = activeFilter === 'all' || pcat === activeFilter;
+    selectedLayer.setStyle(on ? STYLE_BASE(pcat) : STYLE_DIMMED);
+    selectedLayer = null; activeFeature = null;
   }
-  document.querySelectorAll('.building-item').forEach(el => el.classList.remove('active'));
-});
-
-/* ── Route logic ──────────────────────────────────────── */
-document.getElementById('route-mode-btn').addEventListener('click', toggleRouteMode);
-document.getElementById('cancel-route-mode').addEventListener('click', () => setRouteMode(false));
-
-document.getElementById('btn-set-from').addEventListener('click', () => {
-  if (!activeItem) return;
-  setRouteEndpoint('from', activeItem);
-  document.getElementById('info-panel').classList.add('hidden');
-  if (routeFrom && routeTo) switchTab('route');
-});
-document.getElementById('btn-set-to').addEventListener('click', () => {
-  if (!activeItem) return;
-  setRouteEndpoint('to', activeItem);
-  document.getElementById('info-panel').classList.add('hidden');
-  if (routeFrom && routeTo) switchTab('route');
-});
-
-document.getElementById('clear-from').addEventListener('click', () => {
-  routeFrom = null;
-  updateRouteUI();
-  clearRouteLayer();
-});
-document.getElementById('clear-to').addEventListener('click', () => {
-  routeTo = null;
-  updateRouteUI();
-  clearRouteLayer();
-});
-
-function toggleRouteMode() {
-  setRouteMode(!routeMode);
+  document.querySelectorAll('.bldg-item').forEach(el => el.classList.remove('active'));
+  setDeepLink({});
 }
 
-function setRouteMode(on) {
-  routeMode = on;
-  const btn = document.getElementById('route-mode-btn');
-  const badge = document.getElementById('route-mode-badge');
-  if (on) {
-    btn.textContent = 'Cancelar modo ruta';
-    btn.classList.add('active');
-    badge.classList.remove('hidden');
-    switchTab('route');
-  } else {
-    btn.textContent = 'Activar modo ruta';
-    btn.classList.remove('active');
-    badge.classList.add('hidden');
+/* ── Búsqueda (Fase 4) ─────────────────────────────────────── */
+const searchInput = $('search'), searchResults = $('search-results'), searchClear = $('search-clear');
+let srActive = -1, srItems = [];
+let searchTimer = null;
+
+searchInput.addEventListener('input', () => {
+  searchClear.hidden = !searchInput.value;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 120);   // debounce
+});
+searchClear.addEventListener('click', () => { searchInput.value = ''; searchClear.hidden = true; closeResults(); searchInput.focus(); });
+
+function runSearch() {
+  const q = searchInput.value.trim();
+  if (!q) { closeResults(); return; }
+  const res = fuse ? fuse.search(normalize(q), { limit: 8 }) : [];
+  searchResults.innerHTML = '';
+  srItems = []; srActive = -1;
+  if (!res.length) {
+    searchResults.innerHTML = `<li class="sr-empty">No encontramos <b>«${q}»</b>. Prueba con el nombre corto, como <b>A6</b> o <b>CETEC</b>.</li>`;
+    openResults(); searchInput.removeAttribute('aria-activedescendant'); return;
   }
-}
-
-function assignRoutePoint(feature) {
-  if (!routeFrom) {
-    setRouteEndpoint('from', feature);
-  } else if (!routeTo) {
-    setRouteEndpoint('to', feature);
-    setRouteMode(false);
-  } else {
-    routeTo = null;          // limpiar ANTES para que fetchRoute no dispare con destino viejo
-    clearRouteLayer();
-    setRouteEndpoint('from', feature);
+  for (const { item } of res) {
+    const li = document.createElement('li');
+    li.className = 'sr-item'; li.id = `sr-${item.fid}`; li.setAttribute('role', 'option'); li.setAttribute('aria-selected', 'false');
+    li.style.setProperty('color', categoryLine(item.cat));
+    li.innerHTML = `<span class="sr-ic">${catIcon(item.cat, 20)}</span><span class="sr-name">${item.name}</span><span class="sr-cat">${CATEGORY_STYLE[item.cat].label}</span>`;
+    li.addEventListener('click', () => chooseResult(item.fid));
+    searchResults.appendChild(li); srItems.push(li);
   }
+  openResults();
 }
+function openResults() { searchResults.hidden = false; searchInput.setAttribute('aria-expanded', 'true'); }
+function closeResults() { searchResults.hidden = true; searchInput.setAttribute('aria-expanded', 'false'); searchInput.removeAttribute('aria-activedescendant'); srItems = []; srActive = -1; }
+function setActive(i) {
+  if (!srItems.length) return;
+  srActive = (i + srItems.length) % srItems.length;
+  srItems.forEach((el, idx) => el.setAttribute('aria-selected', String(idx === srActive)));
+  const el = srItems[srActive];
+  el.scrollIntoView({ block: 'nearest' });
+  searchInput.setAttribute('aria-activedescendant', el.id);
+}
+function chooseResult(fid) {
+  const r = registry.get(fid); if (!r) return;
+  closeResults(); searchInput.blur();
+  onBuildingClick(r.feature, r.layer, true);
+}
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); if (searchResults.hidden) runSearch(); else setActive(srActive + 1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(srActive - 1); }
+  else if (e.key === 'Enter') { if (srActive >= 0 && srItems[srActive]) { e.preventDefault(); chooseResult(srItems[srActive].id.slice(3)); } }
+  else if (e.key === 'Escape') { if (!searchResults.hidden) closeResults(); else { searchInput.value = ''; searchClear.hidden = true; } }
+});
+document.addEventListener('click', (e) => { if (!$('search-region').contains(e.target)) closeResults(); });
+// Atajo global "/"
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
+    e.preventDefault(); searchInput.focus();
+  }
+});
 
-function setRouteEndpoint(side, feature) {
-  if (side === 'from') routeFrom = feature;
-  else routeTo = feature;
+/* ── Flujo de ruta (Fase 6) ────────────────────────────────── */
+let routeFrom = null, routeTo = null, routeLayer = null, routeSelecting = null; // 'from'|'to'|'auto'
+let navWatchId = null, navPath = null;
+
+function shortId(f) { return normalize(f.properties.name || f.properties._fid).replace(/\s+/g, '-').slice(0, 40); }
+function epLatLng(ep) { return ep._isLocation ? [ep.lat, ep.lng] : ep.feature.properties._center; }
+function epName(ep) { return ep ? (ep._isLocation ? ep.name : ep.feature.properties.name) : null; }
+
+function openRouteView() { $('route-view').hidden = false; if (mq('(max-width:768px)').matches) snapSheet(1); }
+function closeRouteView() { $('route-view').hidden = true; }
+
+$('route-back').addEventListener('click', closeRouteView);
+$('btn-directions').addEventListener('click', () => {
+  if (!activeFeature) return;
+  routeTo = { feature: activeFeature }; deselect();
+  openRouteView();
+  if (userLocation) { routeFrom = { _isLocation: true, ...userLocation, name: 'Mi ubicación' }; tryRoute(); }
+  else startSelect('from');
   updateRouteUI();
-  if (routeFrom && routeTo) fetchRoute();
-}
+});
+$('btn-set-from').addEventListener('click', () => {
+  if (!activeFeature) return;
+  routeFrom = { feature: activeFeature }; routeTo = null; deselect();
+  openRouteView(); startSelect('to'); updateRouteUI();
+});
+$('route-select-toggle').addEventListener('click', () => startSelect('auto'));
+$('route-select-cancel').addEventListener('click', () => stopSelect());
+$('clear-from').addEventListener('click', () => { routeFrom = null; clearRoute(); updateRouteUI(); });
+$('clear-to').addEventListener('click', () => { routeTo = null; clearRoute(); updateRouteUI(); });
+$('route-swap').addEventListener('click', () => { [routeFrom, routeTo] = [routeTo, routeFrom]; updateRouteUI(); tryRoute(); });
 
+function startSelect(side) {
+  routeSelecting = side;
+  const badge = $('route-select-badge'); badge.hidden = false;
+  $('route-select-text').textContent = side === 'to' ? 'Toca un edificio para el destino' : 'Toca un edificio para el origen';
+}
+function stopSelect() { routeSelecting = null; $('route-select-badge').hidden = true; }
+function assignRouteEndpoint(feature) {
+  const ep = { feature };
+  if (routeSelecting === 'to') { routeTo = ep; stopSelect(); }
+  else if (routeSelecting === 'from') { routeFrom = ep; stopSelect(); }
+  else { // auto
+    if (!routeFrom) { routeFrom = ep; $('route-select-text').textContent = 'Toca un edificio para el destino'; }
+    else { routeTo = ep; stopSelect(); }
+  }
+  updateRouteUI(); tryRoute();
+}
 function updateRouteUI() {
-  const setName = (id, ep) => {
-    const el = document.getElementById(id);
-    if (ep) {
-      el.textContent = endpointName(ep);
-      el.classList.remove('placeholder');
-    } else {
-      el.textContent = 'Selecciona en el mapa';
-      el.classList.add('placeholder');
-    }
+  const set = (id, ep) => {
+    const el = $(id);
+    if (ep) { el.textContent = epName(ep); el.classList.remove('placeholder'); }
+    else { el.textContent = 'Selecciona en el mapa'; el.classList.add('placeholder'); }
   };
-  setName('route-from-name', routeFrom);
-  setName('route-to-name', routeTo);
-
-  const hint = document.getElementById('route-hint');
-  hint.classList.toggle('hidden', !!(routeFrom || routeTo));
+  set('route-from-name', routeFrom); set('route-to-name', routeTo);
 }
+function tryRoute() { if (routeFrom && routeTo) fetchRoute(); }
 
 function getEntries(ep) {
   if (!ep || ep._isLocation) return [];
-  const name = normalize(ep.properties?.name || '');
-  // Buildings whose name starts with "entrada" are themselves entrances/guardhouses;
-  // route to their centroid projected onto the nearest path, no entry lookup needed.
+  const name = normalize(ep.feature.properties.name || '');
   if (!name || name.startsWith('entrada ')) return [];
-  return entryPoints
-    .filter(e => e.name.includes(name))
-    .map(e => [e.lat, e.lng]);
+  return entryPoints.filter(e => e.name.includes(name)).map(e => [e.lat, e.lng]);
 }
-
-async function fetchRoute() {
+async function fetchRoute(silent) {
   if (!routeFrom || !routeTo) return;
-  const [fromLat, fromLng] = endpointLatLng(routeFrom);
-  const [toLat, toLng] = endpointLatLng(routeTo);
-
+  const [fLat, fLng] = epLatLng(routeFrom), [tLat, tLng] = epLatLng(routeTo);
   if (campusRouter) {
-    const fromEntries = getEntries(routeFrom);
-    const toEntries   = getEntries(routeTo);
-    const result = campusRouter.route(fromLat, fromLng, toLat, toLng, fromEntries, toEntries);
-    if (result) {
-      drawRoute(result.path);
-      showRouteSummary(result.distance, result.distance / 1.2); // ~1.2 m/s campus walking
-    } else {
-      showRouteSummary(null, null);
-      console.warn('[Router] No se encontró ruta — verifica que los caminos estén conectados');
-    }
+    const result = campusRouter.route(fLat, fLng, tLat, tLng, getEntries(routeFrom), getEntries(routeTo));
+    if (result) { drawRoute(result.path); showNav(result.distance, epName(routeTo)); }
+    else if (!silent) showRouteError();
     return;
   }
-
-  // Fallback: OSRM público
   try {
-    const url = `https://router.project-osrm.org/route/v1/foot/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
-    const res = await fetch(url);
-    const data = await res.json();
+    const url = `https://router.project-osrm.org/route/v1/foot/${fLng},${fLat};${tLng},${tLat}?overview=full&geometries=geojson`;
+    const data = await (await fetch(url)).json();
     if (data.code !== 'Ok') throw new Error(data.code);
-    const route = data.routes[0];
-    const latlngs = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-    drawRoute(latlngs);
-    showRouteSummary(route.distance, route.duration);
-  } catch (err) {
-    console.error('OSRM error:', err);
-    showRouteSummary(null, null);
-  }
+    const rt = data.routes[0];
+    drawRoute(rt.geometry.coordinates.map(([lng, lat]) => [lat, lng]));
+    showNav(rt.distance, epName(routeTo));
+  } catch (err) { console.error('OSRM error:', err); if (!silent) showRouteError(); }
 }
-
 function drawRoute(latlngs) {
   clearRouteLayer();
+  navPath = latlngs;
   routeLayer = L.layerGroup().addTo(map);
-
-  const line = L.polyline(latlngs, {
-    color: '#f59e0b', weight: 5, opacity: 0.9,
-    lineJoin: 'round', lineCap: 'round',
-  }).addTo(routeLayer);
-
-  map.fitBounds(line.getBounds(), { padding: [60, 60] });
-
-  const dot = (color) => `<div style="background:${color};width:14px;height:14px;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`;
-  L.marker(latlngs[0],                  { icon: L.divIcon({ className: '', html: dot('#10b981'), iconSize: [14,14], iconAnchor: [7,7] }) }).addTo(routeLayer);
-  L.marker(latlngs[latlngs.length - 1], { icon: L.divIcon({ className: '', html: dot('#f59e0b'), iconSize: [14,14], iconAnchor: [7,7] }) }).addTo(routeLayer);
+  // Casing blanco debajo para legibilidad sobre cualquier basemap (Fase 6.3)
+  L.polyline(latlngs, { color: cssVar('--route-casing'), weight: 10, opacity: 1, lineJoin: 'round', lineCap: 'round' }).addTo(routeLayer);
+  L.polyline(latlngs, { color: cssVar('--c-accent'), weight: 6, opacity: 1, lineJoin: 'round', lineCap: 'round' }).addTo(routeLayer);
+  // Marcadores: origen círculo hueco, destino pin sólido
+  L.marker(latlngs[0], { icon: L.divIcon({ className: '', html: `<div style="width:14px;height:14px;border:3px solid ${cssVar('--route-origin')};background:${cssVar('--c-bg')};border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`, iconSize: [14,14], iconAnchor: [7,7] }) }).addTo(routeLayer);
+  L.marker(latlngs[latlngs.length-1], { icon: L.divIcon({ className: '', html: `<div style="width:16px;height:16px;background:${cssVar('--c-accent')};border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(45deg);box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`, iconSize: [16,16], iconAnchor: [8,8] }) }).addTo(routeLayer);
+  const isMobile = mq('(max-width:768px)').matches;
+  map.fitBounds(L.polyline(latlngs).getBounds(), {
+    paddingTopLeft: isMobile ? [30, 30] : [$('sidebar').offsetWidth + 30, 30],
+    paddingBottomRight: [30, isMobile ? Math.round(window.innerHeight * 0.35) : 30],
+  });
 }
-
-function showRouteSummary(distM, durS) {
-  const summary = document.getElementById('route-summary');
-  if (!distM) {
-    summary.classList.remove('visible');
-    return;
-  }
-  const dist = distM < 1000 ? `${Math.round(distM)} m` : `${(distM/1000).toFixed(1)} km`;
-  const mins = Math.ceil(durS / 60);
-  summary.innerHTML = `
-    <div class="route-stat">
-      <span class="route-stat-label">Distancia</span>
-      <span class="route-stat-value">${dist}</span>
-    </div>
-    <div class="route-stat">
-      <span class="route-stat-label">Caminando ~</span>
-      <span class="route-stat-value">${mins} min</span>
-    </div>`;
-  summary.classList.add('visible');
+function showNav(distM, toName) {
+  $('route-summary').hidden = false;
+  $('route-summary').innerHTML = `<div><div class="rs-stat-label">Distancia</div><div class="rs-stat-value">${fmtDist(distM)}</div></div><div><div class="rs-stat-label">A pie</div><div class="rs-stat-value">${fmtTime(distM)}</div></div>`;
+  $('route-hint').hidden = true;
+  $('nav-time').textContent = fmtTime(distM);
+  $('nav-dist').textContent = fmtDist(distM);
+  $('nav-to').textContent = `Llegando a ${toName || '…'}`;
+  $('nav-bar').hidden = false;
+  startNavWatch();
 }
-
-function clearRouteLayer() {
-  if (routeLayer) { routeLayer.clearLayers(); map.removeLayer(routeLayer); routeLayer = null; }
-  document.getElementById('route-summary').classList.remove('visible');
+function showRouteError() {
+  $('route-summary').hidden = false;
+  $('route-summary').innerHTML = `<div class="rs-stat-label" style="text-transform:none">No pudimos calcular la ruta. Verifica que ambos puntos estén dentro del campus.</div>`;
 }
-
-/* ── Search ───────────────────────────────────────────── */
-const searchInput = document.getElementById('search');
-const searchClear = document.getElementById('search-clear');
-
-searchInput.addEventListener('input', () => {
-  const q = searchInput.value.trim().toLowerCase();
-  searchClear.classList.toggle('visible', q.length > 0);
-  const filtered = getFiltered(q);
-  renderList(filtered);
-  updateMapOpacity(filtered);
-});
-searchClear.addEventListener('click', () => {
-  searchInput.value = '';
-  searchClear.classList.remove('visible');
-  const filtered = getFiltered('');
-  renderList(filtered);
-  updateMapOpacity(filtered);
-});
-
-/* ── Tabs ─────────────────────────────────────────────── */
-document.querySelectorAll('.tab').forEach(btn => {
-  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-});
-
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${name}`));
+function clearRouteLayer() { if (routeLayer) { routeLayer.clearLayers(); map.removeLayer(routeLayer); routeLayer = null; } navPath = null; }
+function clearRoute() {
+  clearRouteLayer();
+  $('route-summary').hidden = true; $('route-hint').hidden = false;
+  $('nav-bar').hidden = true; stopNavWatch();
+  setDeepLink({});
 }
+$('nav-cancel').addEventListener('click', () => { routeFrom = routeTo = null; clearRoute(); updateRouteUI(); closeRouteView(); });
 
-/* ── User location ────────────────────────────────────── */
-document.getElementById('locate-btn').addEventListener('click', locateUser);
-
-function locateUser() {
-  if (!navigator.geolocation) return alert('Tu navegador no soporta geolocalización.');
-  navigator.geolocation.getCurrentPosition(pos => {
+// Recalcular al desviarse >25 m (Fase 6.2)
+function startNavWatch() {
+  if (!navigator.geolocation || navWatchId != null) return;
+  navWatchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
-    userLocation = { lat, lng };
-    if (userMarker) map.removeLayer(userMarker);
-    const icon = L.divIcon({
-      className: '',
-      html: '<div class="user-location-dot"></div>',
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
-    });
-    userMarker = L.marker([lat, lng], { icon, zIndexOffset: 1000 })
-      .addTo(map)
-      .bindPopup('Estás aquí')
-      .openPopup();
-    map.setView([lat, lng], 18, { animate: true });
-  }, () => alert('No se pudo obtener tu ubicación.'));
+    userLocation = { lat, lng }; drawUser();
+    if (!navPath || !routeFrom || !routeFrom._isLocation) return;
+    let min = Infinity;
+    for (const [plat, plng] of navPath) min = Math.min(min, haversine(lat, lng, plat, plng));
+    if (min > 25) {
+      $('nav-to').innerHTML = '<span class="recalc">Recalculando…</span>';
+      routeFrom = { _isLocation: true, lat, lng, name: 'Mi ubicación' };
+      fetchRoute(true);
+    }
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 5000 });
 }
+function stopNavWatch() { if (navWatchId != null) { navigator.geolocation.clearWatch(navWatchId); navWatchId = null; } }
 
-document.getElementById('btn-from-location').addEventListener('click', () => {
-  if (!activeItem) return;
-  if (!navigator.geolocation) {
-    alert('Tu navegador no soporta geolocalización.');
-    return;
-  }
+/* ── Geolocalización + rumbo (Fases 5.2 / 9.2) ─────────────── */
+$('locate-btn').addEventListener('click', () => {
+  if (!navigator.geolocation) { alert('Tu navegador no soporta geolocalización.'); return; }
+  $('locate-btn').classList.add('locating');
   navigator.geolocation.getCurrentPosition(pos => {
-    const { latitude: lat, longitude: lng } = pos.coords;
-    userLocation = { lat, lng };
-
-    if (userMarker) map.removeLayer(userMarker);
-    const icon = L.divIcon({
-      className: '',
-      html: '<div class="user-location-dot"></div>',
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
-    });
-    userMarker = L.marker([lat, lng], { icon, zIndexOffset: 1000 }).addTo(map);
-
-    routeFrom = { _isLocation: true, lat, lng, name: 'Mi ubicación' };
-    routeTo = activeItem;
-    updateRouteUI();
-    fetchRoute();
-    switchTab('route');
-    document.getElementById('info-panel').classList.add('hidden');
-  }, () => alert('No se pudo obtener tu ubicación. Verifica los permisos del navegador.'));
+    userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    drawUser();
+    map.setView([userLocation.lat, userLocation.lng], Math.max(map.getZoom(), 18), { animate: !REDUCED_MOTION() });
+    renderList();
+    requestHeading();
+  }, () => { alert('No se pudo obtener tu ubicación. Revisa los permisos.'); }, { enableHighAccuracy: true })
+  ;
+  $('locate-btn').classList.remove('locating');
 });
-
-/* ── Mobile sidebar ───────────────────────────────────── */
-const sidebar = document.getElementById('sidebar');
-const sidebarOverlay = document.getElementById('sidebar-overlay');
-
-function openSidebar() {
-  sidebar.classList.add('open');
-  sidebarOverlay.classList.add('visible');
+function drawUser() {
+  if (!userLocation) return;
+  const html = `<div class="user-dot-wrap"><div class="user-heading"${userHeading==null?' style="display:none"':` style="transform:rotate(${userHeading}deg)"`}></div><div class="user-dot"></div></div>`;
+  const icon = L.divIcon({ className: '', html, iconSize: [16,16], iconAnchor: [8,8] });
+  if (userMarker) userMarker.setIcon(icon), userMarker.setLatLng([userLocation.lat, userLocation.lng]);
+  else userMarker = L.marker([userLocation.lat, userLocation.lng], { icon, zIndexOffset: 1000, interactive: false }).addTo(map);
 }
-function closeSidebar() {
-  sidebar.classList.remove('open');
-  sidebarOverlay.classList.remove('visible');
+function requestHeading() {
+  const handler = (e) => { if (e.alpha != null) { userHeading = 360 - e.alpha; drawUser(); } };
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(s => { if (s === 'granted') window.addEventListener('deviceorientation', handler, true); }).catch(() => {});
+  } else if ('ondeviceorientationabsolute' in window) {
+    window.addEventListener('deviceorientationabsolute', handler, true);
+  } else if (typeof DeviceOrientationEvent !== 'undefined') {
+    window.addEventListener('deviceorientation', handler, true);
+  }
 }
 
-document.getElementById('menu-btn').addEventListener('click', openSidebar);
-document.getElementById('sidebar-close').addEventListener('click', closeSidebar);
-sidebarOverlay.addEventListener('click', closeSidebar);
+/* ── Bottom sheet móvil (Fase 5.1) ─────────────────────────── */
+const SNAPS = [0.18, 0.55, 0.92];
+const sheet = $('sidebar');
+let sheetSnap = 0, dragging = false, dragStartY = 0, dragStartTy = 0, lastY = 0, lastT = 0, velocity = 0;
+
+function tyForSnap(i) { return sheet.offsetHeight - SNAPS[i] * window.innerHeight; }
+function snapSheet(i) {
+  if (!mq('(max-width:768px)').matches) return;
+  sheetSnap = Math.max(0, Math.min(SNAPS.length - 1, i));
+  sheet.style.transform = `translateY(${tyForSnap(sheetSnap)}px)`;
+  sheet.classList.toggle('snap-full', sheetSnap === SNAPS.length - 1);
+  document.body.classList.toggle('sheet-full', sheetSnap === SNAPS.length - 1);
+}
+function onDragStart(e) {
+  if (!mq('(max-width:768px)').matches) return;
+  dragging = true; sheet.classList.add('dragging');
+  dragStartY = e.clientY;
+  dragStartTy = new DOMMatrixReadOnly(getComputedStyle(sheet).transform).m42 || tyForSnap(sheetSnap);
+  lastY = e.clientY; lastT = performance.now(); velocity = 0;
+  sheet.setPointerCapture?.(e.pointerId);
+}
+function onDragMove(e) {
+  if (!dragging) return;
+  const dy = e.clientY - dragStartY;
+  let ty = Math.max(tyForSnap(SNAPS.length - 1), Math.min(tyForSnap(0) + 40, dragStartTy + dy));
+  sheet.style.transform = `translateY(${ty}px)`;
+  const now = performance.now(); const dt = now - lastT;
+  if (dt > 0) velocity = (e.clientY - lastY) / dt * 1000; // px/s
+  lastY = e.clientY; lastT = now;
+}
+function onDragEnd() {
+  if (!dragging) return;
+  dragging = false; sheet.classList.remove('dragging');
+  const ty = new DOMMatrixReadOnly(getComputedStyle(sheet).transform).m42;
+  const currentFrac = (sheet.offsetHeight - ty) / window.innerHeight;
+  const projected = currentFrac - (velocity / window.innerHeight) * 0.15;
+  let best = 0, bestD = Infinity;
+  SNAPS.forEach((s, i) => { const d = Math.abs(s - projected); if (d < bestD) { bestD = d; best = i; } });
+  snapSheet(best);
+}
+$('sheet-handle').addEventListener('pointerdown', onDragStart);
+$('panel-header').addEventListener('pointerdown', (e) => { if (e.target.closest('button')) return; onDragStart(e); });
+window.addEventListener('pointermove', onDragMove);
+window.addEventListener('pointerup', onDragEnd);
+window.addEventListener('pointercancel', onDragEnd);
+$('sheet-scrim').addEventListener('click', () => snapSheet(1));
+window.addEventListener('resize', () => { if (mq('(max-width:768px)').matches) snapSheet(sheetSnap); else sheet.style.transform = ''; });
+// Estado inicial en móvil
+if (mq('(max-width:768px)').matches) requestAnimationFrame(() => snapSheet(0));
+
+/* ── Onboarding + privacidad (Fase 9.3 / 7) ────────────────── */
+const onboard = $('onboard');
+function openOnboard() {
+  onboard.hidden = false;
+  const accept = $('onboard-accept'); accept.focus();
+  trapFocus(onboard);
+}
+function closeOnboard() {
+  onboard.hidden = true; releaseFocus();
+  save(LS.onboard, '1');
+  if (mq('(max-width:768px)').matches) snapSheet(1);
+}
+$('onboard-accept').addEventListener('click', closeOnboard);
+
+let _trapEl = null, _trapHandler = null, _lastFocus = null;
+function trapFocus(el) {
+  _lastFocus = document.activeElement;
+  const sel = 'button, [href], input, [tabindex]:not([tabindex="-1"])';
+  _trapHandler = (e) => {
+    if (e.key === 'Escape') { closeOnboard(); return; }
+    if (e.key !== 'Tab') return;
+    const f = [...el.querySelectorAll(sel)].filter(n => !n.disabled && n.offsetParent !== null);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+  _trapEl = el; document.addEventListener('keydown', _trapHandler, true);
+}
+function releaseFocus() { if (_trapHandler) document.removeEventListener('keydown', _trapHandler, true); _trapHandler = null; if (_lastFocus && _lastFocus.focus) _lastFocus.focus(); }
+
+if (!load(LS.onboard)) openOnboard();
+
+/* ── Deep links (Fase 9.1) ─────────────────────────────────── */
+function setDeepLink(params) {
+  const url = new URL(location.href);
+  url.search = '';
+  if (params.b) url.searchParams.set('b', params.b);
+  if (params.from) url.searchParams.set('from', params.from);
+  if (params.to) url.searchParams.set('to', params.to);
+  history.replaceState(null, '', url);
+}
+function findByShort(short) {
+  const s = normalize(short).replace(/-/g, ' ');
+  return buildings.find(b => b.nameNorm === s) || buildings.find(b => b.nameNorm.includes(s)) ||
+         buildings.find(b => b.aliasesNorm.split(' ').includes(s));
+}
+function handleDeepLink() {
+  const q = new URLSearchParams(location.search);
+  if (q.get('from') && q.get('to')) {
+    const f = findByShort(q.get('from')), t = findByShort(q.get('to'));
+    if (f && t) { routeFrom = { feature: f.feature }; routeTo = { feature: t.feature }; openRouteView(); updateRouteUI(); tryRoute(); return; }
+  }
+  if (q.get('b')) {
+    const b = findByShort(q.get('b'));
+    if (b) { const r = registry.get(b.fid); if (r) onBuildingClick(r.feature, r.layer, true); }
+  }
+}
