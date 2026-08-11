@@ -2568,7 +2568,8 @@
             "properties": {
                 "@id": "way/1097445049",
                 "amenity": "restaurant",
-                "building": "yes"
+                "building": "yes",
+                "name": "Margherita"
             },
             "id": "way/1097445049",
             "bbox": [
