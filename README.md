@@ -81,4 +81,4 @@ old_maps/             # Previous GeoJSON iterations (reference only)
 
 ## License
 
-MIT © Luis Xavier
+Apache License 2.0 Luis Xavier
