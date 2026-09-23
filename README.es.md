@@ -81,4 +81,4 @@ old_maps/             # Versiones anteriores del GeoJSON (referencia)
 
 ## Licencia
 
-MIT © Luis Xavier
+Apache License 2.0 © Luis Xavier
